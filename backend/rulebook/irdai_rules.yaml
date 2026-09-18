@@ -1,0 +1,83 @@
+# Pratikar IRDAI Health Insurance Regulatory Rulebook
+# Maintained by Navya per Geek2Code 2026 Technical Specification
+# Source: IRDAI Master Circular on Operations and Allied Matters of Health Insurance Business
+# Ref: IRDAI/HLT/CIR/PRO/84/5/2024 dated 29.05.2024
+# All rules are data, deterministic, and evaluated without model intervention.
+
+rules:
+  - id: moratorium_60_month
+    provision_ref: "IRDAI Master Circular 2024 cl. 13 / Moratorium Clause"
+    title: "60-Month Moratorium on Claim Contestability"
+    description: "After sixty continuous months of health insurance coverage, no policy and no claim can be contested on grounds of non-disclosure, misrepresentation, or pre-existing disease, save for established fraud."
+    target_grounds:
+      - "pre-existing"
+      - "ped"
+      - "non-disclosure"
+      - "pre-existing disease"
+      - "prior health"
+      - "hypertension"
+      - "diabetes"
+      - "clause 4.2"
+      - "non disclosure"
+      - "undisclosed"
+    min_continuous_months: 60
+    requires_fields:
+      - "policy_inception_date"
+      - "rejection_date"
+    missing_field_message: "We could not check the moratorium because the policy start date was not found."
+    outcome_on_violation: "pass" # Contestability pass (insurer rejection is invalid, strong contest grounds)
+    explanation_on_violation: "The insurer rejected the claim citing pre-existing condition or non-disclosure, but the policy has completed {continuous_months} months of continuous coverage. Under IRDAI Master Circular 2024 cl. 13, the moratorium period of 60 months has elapsed, making the policy and claim incontestable on these grounds."
+    explanation_on_compliance: "The policy tenure is {continuous_months} months, which is within the 60-month statutory moratorium window."
+
+  - id: waiting_period_ped_36
+    provision_ref: "IRDAI Master Circular 2024 cl. 12 / Pre-Existing Disease Limit"
+    title: "36-Month Statutory Cap on Pre-Existing Disease Waiting Period"
+    description: "The statutory waiting period for pre-existing diseases is capped at 36 continuous months under the 2024 Master Circular."
+    target_grounds:
+      - "pre-existing"
+      - "ped"
+      - "clause 4.2"
+      - "waiting period"
+    min_continuous_months: 36
+    requires_fields:
+      - "policy_inception_date"
+      - "rejection_date"
+    missing_field_message: "We could not verify the 36-month PED waiting cap because the policy start date was not found."
+    outcome_on_violation: "pass"
+    explanation_on_violation: "The policy has completed {continuous_months} continuous months of coverage, exceeding the maximum 36-month pre-existing disease waiting period permitted under IRDAI Master Circular 2024 cl. 12."
+    explanation_on_compliance: "Policy tenure is {continuous_months} months, within the applicable waiting period window."
+
+  - id: waiting_period_initial_30_days
+    provision_ref: "IRDAI Master Circular 2024 / Standard Health Policy Terms cl. 4.1"
+    title: "Initial 30-Day Waiting Period Exclusion"
+    description: "Illnesses diagnosed or treated within 30 days from policy commencement date are excluded, except hospitalisation arising from an accidental injury."
+    target_grounds:
+      - "30-day"
+      - "initial waiting period"
+      - "30 days"
+      - "clause 4.1"
+      - "early claim"
+    max_continuous_months_for_exclusion: 1
+    requires_fields:
+      - "policy_inception_date"
+      - "rejection_date"
+    missing_field_message: "We could not verify the 30-day initial waiting period because the policy inception date was not found."
+    outcome_on_valid_rejection: "fail" # Rejection stands (Weak verdict path)
+    explanation_on_valid_rejection: "The claim occurred within the first 30 days of policy inception ({continuous_months} months / under 30 days) for an illness, which is validly excluded under standard policy terms and IRDAI regulations unless caused by an accident."
+
+  - id: cashless_tat_mandate
+    provision_ref: "IRDAI Master Circular 2024 cl. 5 / Cashless Turnaround Standards"
+    title: "Statutory Turnaround Times for Cashless Decisions"
+    description: "Insurers must convey pre-authorisation decisions within 1 hour and final discharge authorisation within 3 hours of receiving complete documentation from the hospital."
+    target_grounds:
+      - "delay"
+      - "cashless delay"
+      - "tat"
+      - "discharge delay"
+    requires_fields: []
+    outcome_on_violation: "pass"
+    explanation_on_violation: "Cashless authorisation exceeded statutory turnaround limits under IRDAI Master Circular 2024 cl. 5."
+
+# Note on Open Decision #4: Standardised Non-Payable Items (IRDAI/HLT/REG/CIR/193/07/2020).
+# In accordance with PRD §12 and §14.3, non-payable rules are isolated to prevent relying on
+# potentially repealed instruments until confirmed by the regulatory team.
