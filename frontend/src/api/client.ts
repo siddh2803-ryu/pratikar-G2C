@@ -84,7 +84,10 @@ export const api = {
 
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        return res.json();
+        const data = await res.json();
+        if (data && data.analysis_id && !data.client_fallback) {
+          return data;
+        }
       }
     } catch (e) {
       console.warn('Backend /api/analyses request failed or offline, switching to client parser fallback:', e);
@@ -141,6 +144,16 @@ export const api = {
 
   // 4. POST /api/analyses/{id}/appeal
   async generateAppeal(analysisId: string, language: string = 'en'): Promise<{ document_id: string; kind: string; language: string }> {
+    const cached = getDemoData(analysisId) || clientAnalysisCache.get(analysisId);
+    if (cached) {
+      const kind = cached.verdict?.flow === 'flow_c' ? 'grounds_request' : 'gro_letter';
+      return {
+        document_id: `doc-${analysisId}`,
+        kind,
+        language,
+      };
+    }
+
     try {
       const res = await fetch(`${API_BASE}/analyses/${analysisId}/appeal`, {
         method: 'POST',
@@ -156,11 +169,9 @@ export const api = {
       console.warn('Backend appeal endpoint unavailable, using client generator:', e);
     }
 
-    const analysis = getDemoData(analysisId) || clientAnalysisCache.get(analysisId);
-    const kind = analysis?.verdict?.flow === 'flow_c' ? 'grounds_request' : 'gro_letter';
     return {
       document_id: `doc-${analysisId}`,
-      kind,
+      kind: 'gro_letter',
       language,
     };
   },

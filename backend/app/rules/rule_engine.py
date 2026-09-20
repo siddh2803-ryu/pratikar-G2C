@@ -127,13 +127,22 @@ class IRDAIRuleEngine:
         # 2. max_continuous_months_for_exclusion (e.g. initial 30 days)
         if "max_continuous_months_for_exclusion" in rule:
             max_months = rule["max_continuous_months_for_exclusion"]
-            if continuous_months is not None and continuous_months < max_months:
+            days = None
+            if claim.policy_inception_date and claim.rejection_date:
+                days = (claim.rejection_date - claim.policy_inception_date).days
+
+            is_within_initial = (
+                (days is not None and 0 <= days <= 30)
+                or (continuous_months is not None and continuous_months < max_months)
+            )
+            if is_within_initial:
                 outcome = rule.get("outcome_on_valid_rejection", "fail")
+                duration_desc = f"{days} days" if days is not None else f"{continuous_months} months"
                 template = rule.get(
                     "explanation_on_valid_rejection",
-                    f"Claim occurred within the initial exclusion period ({continuous_months} months)."
+                    f"Claim occurred within the initial exclusion period ({duration_desc})."
                 )
-                explanation = template.format(continuous_months=continuous_months)
+                explanation = template.format(continuous_months=duration_desc)
                 return RuleResult(
                     rule_id=rule_id,
                     provision_ref=provision_ref,

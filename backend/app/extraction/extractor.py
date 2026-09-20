@@ -148,7 +148,15 @@ def extract_policyholder_name_from_text(text: str) -> Optional[str]:
 
 def parse_flexible_date(date_str: str) -> Optional[date]:
     """Parses date string with support for multiple standard numeric and textual formats."""
-    clean = re.sub(r"(st|nd|rd|th)", "", date_str.strip())
+    if not date_str:
+        return None
+    # Extract clean date substring from text if extra words were captured
+    date_pat = re.search(
+        r"\b(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})\b",
+        date_str,
+    )
+    raw_date = date_pat.group(1) if date_pat else date_str
+    clean = re.sub(r"(st|nd|rd|th)", "", raw_date.strip())
     clean = re.sub(r"\s+", " ", clean)
     formats = [
         "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d.%m.%Y",
@@ -199,6 +207,14 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
             "number", "no", "dated", "claim", "letter", "status", "repudiation", "rejection",
             "definitions", "definition", "grievance", "ombudsman", "redressal"
         }:
+            return False
+        # Filter out statutory citations or non-rejection references:
+        # e.g., "Section 45" (Insurance Act), "Section 64VB", "Insurance Act", "IRDAI", "Ombudsman", definitions
+        if any(stat in lower_v for stat in [
+            "insurance act", "section 45", "sec 45", "section 64", "sec 64", "irdai", "ombudsman",
+            "definitions for terms", "definitions", "clause 1.1", "section 1.1", "clause 15", "clause 14",
+            "grievance redressal officer", "grievance redressal"
+        ]):
             return False
         return True
 
@@ -469,31 +485,44 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
     # Policy inception date
     policy_inception_date = None
     inception_match = re.search(
-        r"(?:Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Member\s*Since|Continuous\s*Since|Period\s*of\s*Insurance\s*From)[\s:]*([A-Za-z0-9\/\-\.\s,]{8,25})",
+        r"(?:Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Member\s*Since|Continuous\s*Since|Period\s*of\s*Insurance\s*From)[\s:]*([^\n]{8,35})",
         text,
         re.IGNORECASE,
     )
     if inception_match:
         policy_inception_date = parse_flexible_date(inception_match.group(1))
 
-    # Rejection date (look specifically for Date: or Date of Rejection, avoiding inception date)
+    # Rejection date (look specifically for Date of Repudiation/Letter/Decision, avoiding inception/birth dates)
     rejection_date = date.today()
-    rejection_date_match = re.search(
-        r"(?:^|\n)\s*Date\s*(?:of\s*Repudiation|of\s*Letter|of\s*Rejection)?[\s:]*([A-Za-z0-9\/\-\.\s,]{8,25})",
+    explicit_rej_match = re.search(
+        r"(?:Date\s*of\s*(?:Repudiation|Letter|Rejection|Decision|Issue)|Letter\s*Date|Dated)[\s:]*([^\n]{8,35})",
         text,
         re.IGNORECASE,
     )
-    if rejection_date_match:
-        parsed_d = parse_flexible_date(rejection_date_match.group(1))
+    if explicit_rej_match:
+        parsed_d = parse_flexible_date(explicit_rej_match.group(1))
         if parsed_d:
             rejection_date = parsed_d
     else:
-        date_candidates = re.findall(r"\b(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})\b", text)
-        for cand in date_candidates:
-            parsed_d = parse_flexible_date(cand)
-            if parsed_d and (not policy_inception_date or parsed_d != policy_inception_date):
+        # Match standalone 'Date: ...', strictly excluding 'Date of Birth', 'Date of Admission', 'Date of Loss', 'Date of Inception', etc.
+        standalone_date_match = re.search(
+            r"(?:^|\n)\s*Date\s*(?!of\s*(?:Birth|Admission|Hospitali[zs]ation|Discharge|Loss|Inception|Commencement|Event|Injury|Surgery))[\s:]+([^\n]{8,35})",
+            text,
+            re.IGNORECASE,
+        )
+        if standalone_date_match:
+            parsed_d = parse_flexible_date(standalone_date_match.group(1))
+            if parsed_d:
                 rejection_date = parsed_d
-                break
+        else:
+            date_candidates = re.findall(r"\b(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})\b", text)
+            for cand in date_candidates:
+                parsed_d = parse_flexible_date(cand)
+                if parsed_d and (not policy_inception_date or parsed_d != policy_inception_date):
+                    # Exclude birth dates (year < 2010)
+                    if parsed_d.year >= 2010:
+                        rejection_date = parsed_d
+                        break
 
     # Stated ground - extract actual reason or repudiation sentence
     stated_ground, has_specific_reason = extract_rejection_reason_from_text(text)
@@ -518,22 +547,6 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
         elif policy_inception_date and rejection_date:
             days = (rejection_date - policy_inception_date).days
             continuous_months = max(0, days // 30)
-
-    # Policyholder / Insured name extraction
-    policyholder_name = extract_policyholder_name_from_text(text)
-
-    return StructuredClaimRecord(
-        insurer_name=insurer_name,
-        policy_number=policy_number,
-        claim_reference=claim_reference,
-        claim_amount=claim_amount,
-        rejection_date=rejection_date,
-        stated_ground=stated_ground,
-        cited_clause_ref=cited_clause_ref,
-        policy_inception_date=policy_inception_date,
-        continuous_months=continuous_months,
-        policyholder_name=policyholder_name,
-    )
 
     # Policyholder / Insured name extraction
     policyholder_name = extract_policyholder_name_from_text(text)
@@ -593,11 +606,11 @@ class ClaimExtractor:
                 record = heuristic_claim_extractor(raw_text)
 
             # If essential fields were not found in rejection letter, scan first pages of policy PDF (schedule page)
-            if policy_bytes and (not record.policyholder_name or not record.policy_inception_date or not record.policy_number):
+            if policy_bytes and (not record.policyholder_name or not record.policy_inception_date or not record.policy_number or record.continuous_months is None):
                 try:
                     pol_doc = fitz.open(stream=policy_bytes, filetype="pdf")
                     pol_pages = []
-                    for p_num in range(min(3, len(pol_doc))):
+                    for p_num in range(min(5, len(pol_doc))):
                         pol_pages.append(pol_doc[p_num].get_text("text"))
                     pol_text = "\n".join(pol_pages)
 
@@ -613,7 +626,7 @@ class ClaimExtractor:
 
                     if not record.policy_inception_date:
                         inc_match = re.search(
-                            r"(?:Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since)[\s:]*([A-Za-z0-9\/\-\.\s,]{8,25})",
+                            r"(?:First\s*Inception\s*Date|Initial\s*Inception\s*Date|Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since|Date\s*of\s*Inception)[\s:]*([A-Za-z0-9\/\-\.\s,]{8,25})",
                             pol_text,
                             re.IGNORECASE,
                         )
@@ -624,6 +637,11 @@ class ClaimExtractor:
                                 if record.continuous_months is None and record.rejection_date:
                                     days = (record.rejection_date - parsed_inc).days
                                     record.continuous_months = max(0, days // 30)
+
+                    # If continuous months is still None, recompute from dates if available
+                    if record.continuous_months is None and record.policy_inception_date and record.rejection_date:
+                        days = (record.rejection_date - record.policy_inception_date).days
+                        record.continuous_months = max(0, days // 30)
                 except Exception as e_pol:
                     structured_logger.log_event(
                         event="policy_doc_fallback_scan_failed",

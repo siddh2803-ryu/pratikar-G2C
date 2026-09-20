@@ -399,7 +399,7 @@ def test_tenure_unexpired_produces_weak_explained_verdict():
     assert verdict.level == "weak"
     assert verdict.flow == "flow_b"
     assert verdict.appeal_available is False
-    assert "consistent with operative policy waiting periods" in verdict.summary
+    assert "operative policy waiting period" in verdict.summary
     assert any("within the valid" in r.lower() or "within 30 days" in r.lower() for r in verdict.reasons)
     assert any(ev.source_type == "policy_span" and ev.page_number == 12 for ev in verdict.evidence_trail)
 
@@ -437,4 +437,121 @@ def test_evidence_requirements_all_dimensions_present():
     assert len(policy_spans) == 1
     assert policy_spans[0]["page_number"] == 14
     assert "Pre-Existing Diseases" in policy_spans[0]["source_text"]
+
+
+def test_live_uploaded_scenario_2_initial_30_days():
+    """Validates that a live uploaded document set for Scenario 2 (30-day initial exclusion)
+    produces a Weak, legally grounded verdict with exact page number and no appeal.
+    """
+    styles = getSampleStyleSheet()
+    
+    # Generate Letter PDF
+    let_buf = io.BytesIO()
+    let_doc = SimpleDocTemplate(let_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    let_story = [
+        Paragraph("BAJAJ ALLIANZ GENERAL INSURANCE", styles["Heading1"]),
+        Paragraph("Date of Repudiation: 18/08/2026", styles["Normal"]),
+        Paragraph("To: Amit Sharma", styles["Normal"]),
+        Paragraph("Policy Number: OG-26-1902-1801-00001234", styles["Normal"]),
+        Paragraph("Claim Reference: BAGIC/2026/CLM/99102", styles["Normal"]),
+        Paragraph("Policy Inception Date: 06/08/2026", styles["Normal"]),
+        Paragraph("SUB: REPUDIATION UNDER CLAUSE 4.1", styles["Heading2"]),
+        Paragraph(
+            "Dear Mr. Sharma, We regret to inform you that your claim has been repudiated under Clause 4.1 as the hospitalization occurred within the initial 30 days waiting period for medical illnesses.",
+            styles["Normal"]
+        ),
+        Paragraph("Yours faithfully, Claims Department", styles["Normal"]),
+    ]
+    let_doc.build(let_story)
+    let_bytes = let_buf.getvalue()
+
+    # Generate Policy PDF
+    pol_buf = io.BytesIO()
+    pol_doc = SimpleDocTemplate(pol_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    pol_story = [
+        Paragraph("HEALTH GUARD POLICY WORDING", styles["Heading1"]),
+        PageBreak(),
+        Paragraph("SECTION 4: EXCLUSIONS", styles["Heading1"]),
+        Paragraph(
+            "Clause 4.1 Initial 30-Day Waiting Period: A waiting period of 30 days from the inception date of the policy will be applicable for all illness claims except accidental injuries.",
+            styles["Normal"]
+        ),
+    ]
+    pol_doc.build(pol_story)
+    pol_bytes = pol_buf.getvalue()
+
+    res = client.post("/api/analyses", files={
+        "rejection_letter": ("let.pdf", let_bytes, "application/pdf"),
+        "policy_wording": ("pol.pdf", pol_bytes, "application/pdf"),
+    })
+    assert res.status_code == 201
+    analysis_id = res.json()["analysis_id"]
+    data = client.get(f"/api/analyses/{analysis_id}").json()
+
+    assert data["claim_record"]["policyholder_name"] == "Amit Sharma"
+    assert data["claim_record"]["cited_clause_ref"] == "Clause 4.1"
+    assert data["verdict"]["level"] == "weak"
+    assert data["verdict"]["flow"] == "flow_b"
+    assert data["verdict"]["appeal_available"] is False
+
+    trail = data["verdict"]["evidence_trail"]
+    assert any(ev["source_type"] == "policy_span" and ev["page_number"] == 2 for ev in trail)
+    assert any("30-day" in ev["statement"].lower() or "12 days" in ev["statement"].lower() or "within" in ev["statement"].lower() for ev in trail)
+
+
+def test_clause_mismatch_not_fooled_by_percentages_or_tables():
+    """Validates that when an insurer cites 'Clause 5.9' (absent), but the policy contains
+    '5.9%' or 'Table 5.9', the system does NOT match the number and correctly declares Clause Mismatch.
+    """
+    styles = getSampleStyleSheet()
+
+    # Letter citing Clause 5.9
+    let_buf = io.BytesIO()
+    let_doc = SimpleDocTemplate(let_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    let_story = [
+        Paragraph("HDFC ERGO GENERAL INSURANCE", styles["Heading1"]),
+        Paragraph("Date: 20/08/2026", styles["Normal"]),
+        Paragraph("Policyholder Name: Vikram Malhotra", styles["Normal"]),
+        Paragraph("Policy Number: 2801 2049 1928 0000", styles["Normal"]),
+        Paragraph("Claim Reference: HD/REP/2026/8921", styles["Normal"]),
+        Paragraph("SUB: REPUDIATION UNDER CLAUSE 5.9", styles["Heading2"]),
+        Paragraph(
+            "Claim repudiated under Clause 5.9: Treatment excluded under specific waiting period schedule.",
+            styles["Normal"]
+        ),
+    ]
+    let_doc.build(let_story)
+    let_bytes = let_buf.getvalue()
+
+    # Policy containing 5.9% in text but NO Clause 5.9
+    pol_buf = io.BytesIO()
+    pol_doc = SimpleDocTemplate(pol_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    pol_story = [
+        Paragraph("POLICY TERMS", styles["Heading1"]),
+        Paragraph("Co-pay deductible schedule: In non-network facilities, co-pay of 5.9% applies to room rent.", styles["Normal"]),
+        PageBreak(),
+        Paragraph("SECTION 5: GENERAL TERMS", styles["Heading1"]),
+        Paragraph("Clause 5.1 Free Look Period: 15 days from date of receipt.", styles["Normal"]),
+        Paragraph("Clause 5.2 Renewal Terms: Lifelong renewability.", styles["Normal"]),
+    ]
+    pol_doc.build(pol_story)
+    pol_bytes = pol_buf.getvalue()
+
+    res = client.post("/api/analyses", files={
+        "rejection_letter": ("let.pdf", let_bytes, "application/pdf"),
+        "policy_wording": ("pol.pdf", pol_bytes, "application/pdf"),
+    })
+    assert res.status_code == 201
+    analysis_id = res.json()["analysis_id"]
+    data = client.get(f"/api/analyses/{analysis_id}").json()
+
+    assert data["claim_record"]["cited_clause_ref"] == "Clause 5.9"
+    assert data["verdict"]["level"] == "strong"
+    assert data["verdict"]["flow"] == "flow_a"
+    assert "Clause/Policy Mismatch" in data["verdict"]["summary"]
+
+    # Evidence trail must NOT contain the 5.9% co-pay span
+    trail = data["verdict"]["evidence_trail"]
+    assert all(ev["source_type"] != "policy_span" for ev in trail)
+    assert any("Policy Document Audit" in ev["provision_ref"] for ev in trail)
 

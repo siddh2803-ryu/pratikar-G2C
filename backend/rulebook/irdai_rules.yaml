@@ -61,10 +61,19 @@ rules:
     description: "Illnesses diagnosed or treated within 30 days from policy commencement date are excluded, except hospitalisation arising from an accidental injury."
     target_grounds:
       - "30-day"
-      - "initial waiting period"
       - "30 days"
+      - "30 day"
+      - "thirty days"
+      - "initial waiting period"
+      - "initial waiting"
+      - "initial 30"
       - "clause 4.1"
+      - "section 4.1"
       - "early claim"
+      - "first 30 days"
+      - "within 30 days"
+      - "initial exclusion"
+      - "waiting period of 30 days"
     max_continuous_months_for_exclusion: 1
     requires_fields:
       - "policy_inception_date"

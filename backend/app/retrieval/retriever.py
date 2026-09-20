@@ -95,7 +95,8 @@ def score_clause_candidate(
     if any(xref in surrounding for xref in [
         "as defined under", "as specified in", "referred to in", "refer to clause",
         "in accordance with clause", "subject to clause", "clause 1.1", "grievance redressal",
-        "ombudsman", "arbitration"
+        "ombudsman", "arbitration", "as referenced under", "refer to", "referred to under",
+        "for the purpose of"
     ]):
         score -= 50
         rationales.append("incidental_cross_reference")
@@ -188,7 +189,6 @@ class ClauseRetriever:
                     re.compile(rf"\bExclusion\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\bCondition\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"(?:^|\n)\s*{re.escape(clause_num)}[\s\.\-:]+[A-Z]", re.IGNORECASE),
-                    re.compile(rf"\b{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\b{re.escape(clean_ref)}\b", re.IGNORECASE),
                 ]
 
@@ -253,9 +253,9 @@ class ClauseRetriever:
             candidate_matches.sort(key=lambda x: x[4], reverse=True)
             best_chunk, start_idx, end_idx, verbatim_text, best_score, best_rationale = candidate_matches[0]
 
-            # If the best score is heavily negative (e.g. only index/TOC matches were found),
-            # this proves the clause exists ONLY as an index entry and NOT as an operative provision!
-            if best_score < 0:
+            # If the best score is below the positive operative confidence threshold (e.g. index/TOC matches or non-operative mentions),
+            # this establishes that no genuine operative clause exists in the policy!
+            if best_score < 30:
                 structured_logger.log_event(
                     event="clause_only_in_index_or_non_operative",
                     stage="clause_retrieval",
@@ -268,7 +268,7 @@ class ClauseRetriever:
                     },
                 )
                 raise ClauseNotFoundError(
-                    f"The clause cited by your insurer ({clean_ref}) appears only in an index or table of contents (Page {best_chunk.page_number}), but no operative policy provision defining this clause exists in the policy contract. This establishes a clause/policy mismatch."
+                    f"The clause cited by your insurer ({clean_ref}) appears only in an index, cross-reference, or non-operative section (Page {best_chunk.page_number}), but no operative policy provision defining this exclusion exists in the policy contract. This establishes a clause/policy mismatch."
                 )
 
             structured_logger.log_event(
