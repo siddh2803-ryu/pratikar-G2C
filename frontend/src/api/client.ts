@@ -56,7 +56,10 @@ export interface AnalysisResponse {
   } | null;
 }
 
-const API_BASE = '/api';
+// Support dynamic backend URL on Vercel/Cloudflare or fallback to local /api proxy
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/+$/, '')}/api`
+  : '/api';
 
 export const api = {
   // 1. POST /api/analyses
