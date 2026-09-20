@@ -74,7 +74,7 @@ def generate_all_assets():
             ])
     create_pdf(assets_dir / "case_1_policy_wording.pdf", c1_policy_pages)
 
-    # 2. Case 2: Rejection Letter (30-day initial waiting period)
+    # 2. Case 2: Rejection Letter Does NOT Specify a Rejection Clause (Flow C)
     c2_letter = [
         [
             Paragraph("<b>CARE HEALTH INSURANCE LIMITED</b>", title_style),
@@ -87,33 +87,26 @@ def generate_all_assets():
             Paragraph("Policy Inception Date: 06/08/2026", body_style),
             Paragraph("Claimed Amount: Rs. 92,000.00", body_style),
             Spacer(1, 15),
-            Paragraph("<b>RE: REPUDIATION UNDER CLAUSE 4.1 (INITIAL 30 DAYS WAITING PERIOD)</b>", bold_style),
+            Paragraph("<b>SUBJECT: CLAIM STATUS NOTIFICATION</b>", bold_style),
             Spacer(1, 10),
-            Paragraph("Dear Ms. Sneha Verma,<br/><br/>Your claim for medical treatment of acute appendicitis on 17/08/2026 stands repudiated.<br/><br/><b>Reason:</b> Repudiation under Clause 4.1: Claim reported within the initial 30 days waiting period for non-accidental illness. Policy inception date was 06/08/2026 (only 12 days continuous coverage).<br/><br/>Claims Officer,<br/>Care Health Insurance", body_style),
+            Paragraph("Dear Ms. Sneha Verma,<br/><br/>With reference to your hospitalization claim CARE/2026/CLM/44120, we regret to inform you that after careful examination, the claim stands repudiated as per terms and conditions of the policy.<br/><br/>If you require any assistance, please reach out to our customer care team.<br/><br/>Yours faithfully,<br/>Claims Officer,<br/>Care Health Insurance", body_style),
         ]
     ]
     create_pdf(assets_dir / "case_2_rejection_letter.pdf", c2_letter)
 
-    # 2. Case 2: Policy Wording (12 pages, Clause 4.1 on Page 9)
+    # 2. Case 2: Policy Wording (12 pages of standard policy terms)
     c2_policy_pages = []
     for p in range(1, 13):
-        if p == 9:
-            c2_policy_pages.append([
-                Paragraph(f"<b>CARE HEALTH POLICY TERMS - PAGE {p}</b>", title_style),
-                Spacer(1, 10),
-                Paragraph("<b>Clause 4.1 30-day Waiting Period (Code-Excl03):</b> Expenses related to the treatment of any illness within 30 days from the first policy commencement date shall be excluded except claims arising due to an accident.", bold_style),
-                Spacer(1, 10),
-                Paragraph("This exclusion applies uniformly to all non-emergency or medical illnesses contracted in the initial month.", body_style),
-            ])
-        else:
-            c2_policy_pages.append([
-                Paragraph(f"<b>CARE HEALTH POLICY TERMS - PAGE {p}</b>", title_style),
-                Spacer(1, 10),
-                Paragraph("Terms, limits, network provider guidelines, and policy schedules.", body_style),
-            ])
+        c2_policy_pages.append([
+            Paragraph(f"<b>CARE HEALTH POLICY TERMS - PAGE {p}</b>", title_style),
+            Spacer(1, 10),
+            Paragraph(f"Section {p}. Standard definitions, coverage terms, network hospital guidelines, and general policy conditions.", body_style),
+            Spacer(1, 10),
+            Paragraph("This policy document outlines standard inpatient care benefits, day-care procedures, and claim submission protocols.", body_style),
+        ])
     create_pdf(assets_dir / "case_2_policy_wording.pdf", c2_policy_pages)
 
-    # 3. Case 3: Clause-less Rejection Letter (Flow C)
+    # 3. Case 3: Rejection Letter Cites Clause 5.9 That Does NOT Exist in the Policy (Clause Mismatch)
     c3_letter = [
         [
             Paragraph("<b>HDFC ERGO GENERAL INSURANCE COMPANY LIMITED</b>", title_style),
@@ -125,18 +118,23 @@ def generate_all_assets():
             Paragraph("Claim Reference: HD/REP/2026/8921", bold_style),
             Paragraph("Claimed Amount: Rs. 165,000.00", body_style),
             Spacer(1, 15),
-            Paragraph("<b>SUBJECT: CLAIM STATUS NOTIFICATION</b>", bold_style),
+            Paragraph("<b>SUB: REPUDIATION OF CLAIM UNDER POLICY CLAUSE 5.9</b>", bold_style),
             Spacer(1, 10),
-            Paragraph("Dear Mr. Vikram Malhotra,<br/><br/>We refer to your claim submitted for reimbursement. Please be advised that after careful examination, the claim is repudiated as per terms and conditions of policy.<br/><br/>HDFC ERGO Claims Service", body_style),
+            Paragraph("Dear Mr. Vikram Malhotra,<br/><br/>We refer to your claim submitted for reimbursement. Please be advised that after examination, your claim has been repudiated under <b>Clause 5.9</b> of the policy.<br/><br/><b>Stated Ground:</b> Repudiation under Clause 5.9: Treatment excluded under specific non-contracted waiting period schedule.<br/><br/>Yours faithfully,<br/>Authorized Claims Signatory,<br/>HDFC ERGO General Insurance", body_style),
         ]
     ]
     create_pdf(assets_dir / "case_3_rejection_letter.pdf", c3_letter)
 
-    # 3. Case 3 Policy Wording
-    c3_policy_pages = [
-        [Paragraph(f"<b>HDFC ERGO OPTIMA SECURE POLICY - PAGE {p}</b>", title_style), Paragraph("Policy provisions and conditions.", body_style)]
-        for p in range(1, 10)
-    ]
+    # 3. Case 3 Policy Wording (10 pages, Clause 5.9 is completely absent)
+    c3_policy_pages = []
+    for p in range(1, 11):
+        c3_policy_pages.append([
+            Paragraph(f"<b>HDFC ERGO OPTIMA SECURE POLICY - PAGE {p}</b>", title_style),
+            Spacer(1, 10),
+            Paragraph(f"Section {p}. Policy provisions, premium terms, renewal conditions, and standard hospitalisation benefits.", body_style),
+            Spacer(1, 10),
+            Paragraph("Operative terms and conditions governing inpatient medical treatment and claims procedures.", body_style),
+        ])
     create_pdf(assets_dir / "case_3_policy_wording.pdf", c3_policy_pages)
 
     print("All demo PDF assets generated successfully in:", assets_dir)

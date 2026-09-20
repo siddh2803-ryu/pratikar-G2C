@@ -50,7 +50,9 @@ class ClauseRetriever:
                 patterns = [
                     re.compile(rf"\bClause\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\bSection\s+{re.escape(clause_num)}\b", re.IGNORECASE),
-                    re.compile(rf"(?:^|\n)\s*{re.escape(clause_num)}\s+[A-Z]", re.IGNORECASE),
+                    re.compile(rf"\bExclusion\s+{re.escape(clause_num)}\b", re.IGNORECASE),
+                    re.compile(rf"\bCondition\s+{re.escape(clause_num)}\b", re.IGNORECASE),
+                    re.compile(rf"(?:^|\n)\s*{re.escape(clause_num)}[\s\.\-:]+[A-Z]", re.IGNORECASE),
                     re.compile(rf"\b{re.escape(clean_ref)}\b", re.IGNORECASE),
                 ]
 
@@ -70,31 +72,16 @@ class ClauseRetriever:
                         break
 
             if not candidate_matches:
-                # Fallback search by ground keyword if clause_num was not found
-                if stated_ground and len(stated_ground) > 5:
-                    keywords = [w for w in stated_ground.split() if len(w) > 4 and w.lower() not in ("clause", "under", "claim", "rejection", "repudiation")]
-                    for chunk in chunks:
-                        for kw in keywords:
-                            idx = chunk.text.lower().find(kw.lower())
-                            if idx != -1:
-                                start_pos = max(0, idx - 40)
-                                end_pos = min(len(chunk.text), idx + 400)
-                                quoted_text = chunk.text[start_pos:end_pos].strip()
-                                candidate_matches.append((chunk, start_pos, end_pos, quoted_text))
-                                break
-                        if candidate_matches:
-                            break
-
-            if not candidate_matches:
-                # PRD §14 condition: Cited clause not found in the policy
+                # PRD §14 condition: Cited clause not found in the policy (Clause/Policy Mismatch)
+                # Strict quote-or-abstain enforcement: NEVER grab arbitrary PDF text
                 structured_logger.log_event(
                     event="clause_not_found_in_policy",
                     stage="clause_retrieval",
                     level="WARNING",
-                    details={"clause_ref": clause_ref},
+                    details={"clause_ref": clause_ref, "searched_num": clause_num},
                 )
                 raise ClauseNotFoundError(
-                    "The clause your insurer cited does not appear in this policy. That is worth raising."
+                    f"The clause your insurer cited ({clean_ref}) does not appear in this policy document. This establishes a clause/policy mismatch."
                 )
 
             # Pick best match

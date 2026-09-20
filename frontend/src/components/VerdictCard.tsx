@@ -1,38 +1,40 @@
 import React from 'react';
-import { ShieldCheck, AlertTriangle, ShieldAlert, Scale, CheckCircle } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Scale, CheckCircle } from 'lucide-react';
 import { Verdict } from '../api/client';
+import { useLanguage } from '../context/LanguageContext';
 
 interface VerdictCardProps {
   verdict: Verdict;
-  language: string;
+  language?: string;
 }
 
-export const VerdictCard: React.FC<VerdictCardProps> = ({ verdict, language }) => {
-  const isStrong = verdict.level === 'strong';
-  const isWeak = verdict.level === 'weak';
-  const isModerate = verdict.level === 'moderate';
+export const VerdictCard: React.FC<VerdictCardProps> = ({ verdict }) => {
+  const { t, translateDynamic } = useLanguage();
 
   const badgeConfig = {
     strong: {
       bg: 'bg-emerald-50 border-emerald-300 text-emerald-900',
-      badge: 'bg-emerald-600 text-white',
+      badgeBg: 'bg-emerald-600 text-white',
+      badgeText: t('card.strong_level'),
       icon: ShieldCheck,
-      title: language === 'hi' ? 'मजबूत दावा (Strong) — चुनौती योग्य' : 'Strong Contestability — Insurer Violation',
-      desc: language === 'hi' ? 'आईआरडीएआई नियमों के तहत दावा अस्वीकृति अमान्य है।' : 'Statutory IRDAI provisions or policy terms override the insurer\'s rejection ground.',
+      title: t('card.strong_title'),
+      desc: t('card.strong_desc'),
     },
     moderate: {
       bg: 'bg-amber-50 border-amber-300 text-amber-900',
-      badge: 'bg-amber-600 text-white',
+      badgeBg: 'bg-amber-600 text-white',
+      badgeText: t('card.moderate_level'),
       icon: AlertTriangle,
-      title: language === 'hi' ? 'मध्यम स्थिति (Moderate) — पुनर्विचार योग्य' : 'Moderate Contestability — Grounds for Appeal',
-      desc: language === 'hi' ? 'खंड व्याख्या में अस्पष्टता या प्रक्रियात्मक चूक।' : 'Policy clause wording contains ambiguities or insurer failed to substantiate grounds.',
+      title: t('card.moderate_title'),
+      desc: t('card.moderate_desc'),
     },
     weak: {
       bg: 'bg-slate-100 border-slate-300 text-slate-900',
-      badge: 'bg-slate-700 text-white',
+      badgeBg: 'bg-slate-700 text-white',
+      badgeText: t('card.weak_level'),
       icon: Scale,
-      title: language === 'hi' ? 'कमजोर स्थिति (Weak) — अस्वीकृति मान्य' : 'Rejection Stands — Legally Valid Rejection',
-      desc: language === 'hi' ? 'पॉलिसी शर्तों और विनियमों के अनुसार दावा स्वीकार्य नहीं है।' : 'The insurer\'s rejection is legally grounded in applicable waiting periods or exclusions. No appeal is recommended.',
+      title: t('card.weak_title'),
+      desc: t('card.weak_desc'),
     },
   }[verdict.level];
 
@@ -47,11 +49,11 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({ verdict, language }) =
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${badgeConfig.badge}`}>
-                {verdict.level}
+              <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${badgeConfig.badgeBg}`}>
+                {badgeConfig.badgeText}
               </span>
               <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Two-Path Grounded
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> {t('card.two_path_badge')}
               </span>
             </div>
             <h2 className="text-xl font-bold text-slate-900 mt-1">{badgeConfig.title}</h2>
@@ -61,19 +63,22 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({ verdict, language }) =
 
       <div className="mt-4">
         <p className="text-sm sm:text-base font-medium text-slate-800 leading-relaxed">
-          {verdict.summary}
+          {translateDynamic(verdict.summary)}
         </p>
       </div>
 
       <div className="mt-5 space-y-2.5">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">
-          {language === 'hi' ? 'निर्धारित कारण' : 'Determined Legal & Contractual Reasons:'}
+          {t('card.reasons_title')}
         </h4>
         <ul className="space-y-2">
           {verdict.reasons.map((reason, idx) => (
-            <li key={idx} className="text-xs sm:text-sm text-slate-700 flex items-start gap-2 bg-white/70 p-3 rounded-lg border border-black/5">
+            <li
+              key={idx}
+              className="text-xs sm:text-sm text-slate-700 flex items-start gap-2 bg-white/70 p-3 rounded-lg border border-black/5"
+            >
               <span className="font-bold text-brand-600 mt-0.5">•</span>
-              <span className="leading-snug">{reason}</span>
+              <span className="leading-snug">{translateDynamic(reason)}</span>
             </li>
           ))}
         </ul>

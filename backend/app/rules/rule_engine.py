@@ -66,9 +66,17 @@ class IRDAIRuleEngine:
                 explanation=f"Rule {title} is not applicable to the stated ground '{claim.stated_ground}'.",
             )
 
+        # Continuous months derivation if dates present
+        continuous_months = claim.continuous_months
+        if continuous_months is None and claim.policy_inception_date and claim.rejection_date:
+            days = (claim.rejection_date - claim.policy_inception_date).days
+            continuous_months = max(0, days // 30)
+
         # Check required fields
         required_fields = rule.get("requires_fields", [])
         for field_name in required_fields:
+            if field_name == "policy_inception_date" and continuous_months is not None:
+                continue
             val = getattr(claim, field_name, None)
             if val is None:
                 missing_msg = rule.get(
@@ -82,12 +90,6 @@ class IRDAIRuleEngine:
                     outcome="not_applicable",
                     explanation=missing_msg,
                 )
-
-        # Continuous months derivation if dates present
-        continuous_months = claim.continuous_months
-        if continuous_months is None and claim.policy_inception_date and claim.rejection_date:
-            days = (claim.rejection_date - claim.policy_inception_date).days
-            continuous_months = max(0, days // 30)
 
         # Specific rule evaluation conditions defined in YAML metadata:
         # 1. min_continuous_months (e.g. moratorium_60_month or waiting_period_ped_36)

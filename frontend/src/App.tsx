@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Sparkles, AlertCircle, CheckCircle2, Activity } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { api, AnalysisResponse, StructuredClaimRecord, Verdict } from './api/client';
 import { UploadPage } from './pages/UploadPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { VerdictPage } from './pages/VerdictPage';
 import { AppealPage } from './pages/AppealPage';
 import { LanguageToggle } from './components/LanguageToggle';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { Language } from './i18n/translations';
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { language, setLanguage, t } = useLanguage();
   const [step, setStep] = useState<'upload' | 'confirm' | 'verdict' | 'appeal'>('upload');
-  const [language, setLanguage] = useState<string>('en');
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [claimRecord, setClaimRecord] = useState<StructuredClaimRecord | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -59,7 +61,7 @@ export const App: React.FC = () => {
   };
 
   const handleLanguageChange = async (newLang: string) => {
-    setLanguage(newLang);
+    setLanguage(newLang as Language);
     if (step === 'appeal' && analysisId) {
       // Regenerate document in new language
       try {
@@ -91,14 +93,14 @@ export const App: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-lg sm:text-xl tracking-tight text-slate-900">
-                  Pratikar
+                  {t('nav.brand')}
                 </span>
                 <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 border border-brand-200 text-brand-700">
-                  InsurTech
+                  {t('nav.insurtech')}
                 </span>
               </div>
               <div className="text-[10px] text-slate-500 hidden sm:block">
-                Health Claim Rejection Contest Engine · Geek2Code 2026 Grand Final
+                {t('nav.tagline')}
               </div>
             </div>
           </div>
@@ -107,7 +109,7 @@ export const App: React.FC = () => {
             {/* Warmed API status badge */}
             <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
               <span className={`w-2 h-2 rounded-full ${apiWarmed ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-              <span>API {apiWarmed ? 'Warmed & Ready' : 'Connecting'}</span>
+              <span>{apiWarmed ? t('nav.api_warmed') : t('nav.api_connecting')}</span>
             </div>
 
             <LanguageToggle currentLang={language} onToggle={handleLanguageChange} />
@@ -120,22 +122,22 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2 sm:gap-6 mx-auto">
               <span className={`flex items-center gap-1 ${step === 'upload' ? 'text-brand-600 font-bold' : ''}`}>
                 <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">1</span>
-                <span>Upload</span>
+                <span>{t('nav.step_1')}</span>
               </span>
               <span>→</span>
               <span className={`flex items-center gap-1 ${step === 'confirm' ? 'text-brand-600 font-bold' : ''}`}>
                 <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">2</span>
-                <span>Confirm Facts</span>
+                <span>{t('nav.step_2')}</span>
               </span>
               <span>→</span>
               <span className={`flex items-center gap-1 ${step === 'verdict' ? 'text-brand-600 font-bold' : ''}`}>
                 <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">3</span>
-                <span>Verdict & Evidence</span>
+                <span>{t('nav.step_3')}</span>
               </span>
               <span>→</span>
               <span className={`flex items-center gap-1 ${step === 'appeal' ? 'text-brand-600 font-bold' : ''}`}>
                 <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">4</span>
-                <span>Appeal Document</span>
+                <span>{t('nav.step_4')}</span>
               </span>
             </div>
           </div>
@@ -188,16 +190,24 @@ export const App: React.FC = () => {
       <footer className="mt-auto border-t border-slate-200 bg-white py-6">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div>
-            <b>Pratikar</b> · Two-Path Grounded Regulatory Engine · Powered by IRDAI Master Circular 2024
+            <b>{t('nav.brand')}</b> · {t('footer.disclaimer')}
           </div>
           <div className="flex items-center gap-4 text-[11px]">
-            <span>Team: Sid · Pratham · Navya · Parnika · Dhiraj</span>
+            <span>{t('footer.team')}</span>
             <span>·</span>
-            <span>Zero Training Retention (SEC-05)</span>
+            <span>{t('footer.zero_retention')}</span>
           </div>
         </div>
       </footer>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 };
 

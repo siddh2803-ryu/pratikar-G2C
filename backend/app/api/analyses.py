@@ -70,9 +70,9 @@ async def start_analysis(
             detail={"code": "PARSE_ERROR", "message": f"Could not parse policy wording PDF: {str(e)}"},
         )
 
-    # 5. Extract structured claim record from rejection letter
+    # 5. Extract structured claim record from rejection letter (and fallback policy wording)
     try:
-        claim_record = extractor.extract(letter_bytes, rejection_letter.filename)
+        claim_record = extractor.extract(letter_bytes, rejection_letter.filename, policy_bytes=policy_bytes)
     except ValidationError as ve:
         db.update_session(analysis_id, {"status": "failed", "error": {"code": ve.code, "message": ve.message}})
         raise HTTPException(
@@ -95,6 +95,8 @@ async def start_analysis(
             )
         except ClauseNotFoundError as cne:
             clause_error_msg = cne.message
+    else:
+        clause_error_msg = "Your insurer has not stated which clause it relied on. Under IRDAI regulations (Master Circular on Operations 2024 cl. 6), an insurer must state specific contractual grounds with clause citations."
 
     # 8. Merge and Grounding Gate
     try:

@@ -59,12 +59,11 @@ DEMO_CASE_1 = {
     },
 }
 
-# Demo Case 2: WEAK VERDICT (Flow B) — Valid Rejection
-# Care Health policy active for only 12 days.
-# Claim filed for non-accidental illness (Appendicitis hospitalisation).
-# Clause 4.1 (Initial 30-day waiting period) legitimately excludes the claim.
+# Demo Case 2: MODERATE / FLOW C — Rejection Letter Does Not Specify a Rejection Clause
+# Care Health letter repudiates without citing any policy clause, exclusion, or condition.
+# Pratikar detects absence of rejection clause and generates Request-for-Grounds letter.
 DEMO_CASE_2 = {
-    "analysis_id": "demo-case-2-weak-valid-rejection",
+    "analysis_id": "demo-case-2-no-clause",
     "status": "complete",
     "claim_record": {
         "insurer_name": "Care Health Insurance",
@@ -72,75 +71,27 @@ DEMO_CASE_2 = {
         "claim_reference": "CARE/2026/CLM/44120",
         "claim_amount": 92000.0,
         "rejection_date": "2026-08-18",
-        "stated_ground": "Repudiation under Clause 4.1: Claim reported within the initial 30 days waiting period for non-accidental illness.",
-        "cited_clause_ref": "Clause 4.1",
+        "stated_ground": "Claim repudiated as per terms and conditions of the policy.",
+        "cited_clause_ref": None, # ABSENT! Drives Flow C
         "policy_inception_date": "2026-08-06",
         "continuous_months": 0,
         "policyholder_name": "Sneha Verma",
     },
     "verdict": {
-        "level": "weak",
-        "summary": "The insurer's rejection is legally valid under IRDAI standard terms and policy wording. No appeal is recommended.",
+        "level": "moderate",
+        "summary": "The insurer has repudiated the claim without specifying any contractual policy clause, exclusion, condition, or provision.",
         "reasons": [
-            "The claim occurred within the first 30 days of policy inception (0 months / 12 days elapsed) for an illness, which is validly excluded under standard policy terms and IRDAI regulations unless caused by an accident.",
-            "Policy Clause 4.1 explicitly excludes treatment of illnesses diagnosed during the first 30 days."
+            "The rejection letter does not specify any contractual clause, exclusion, condition, or policy provision explaining why the claim was rejected.",
+            "Under IRDAI Master Circular on Operations 2024 cl. 6, insurers are legally mandated to communicate specific grounds along with operative policy terms for any claim rejection.",
+            "A formal Request-for-Grounds letter has been prepared demanding the insurer disclose the specific clause and evidence relied upon.",
         ],
         "evidence_trail": [
             {
                 "id": "ev_demo2_1",
-                "statement": "Initial 30-day exclusion is an approved standard regulatory waiting period.",
-                "source_type": "provision",
-                "provision_ref": "IRDAI Master Circular 2024 / Standard Health Policy Terms cl. 4.1",
-                "source_text": "[IRDAI Master Circular 2024 Standard Terms cl. 4.1]: Expenses related to the treatment of any illness within 30 days from the first policy commencement date shall be excluded except claims arising due to an accident.",
-                "ordinal": 1,
-            },
-            {
-                "id": "ev_demo2_2",
-                "statement": "Policy Clause 4.1 retrieved verbatim from Page 9 of Care Health Policy Wording.",
-                "source_type": "policy_span",
-                "page_number": 9,
-                "source_text": "Clause 4.1 30-day Waiting Period (Code-Excl03): Expenses related to the treatment of any illness within 30 days from the first policy commencement date shall be excluded.",
-                "ordinal": 2,
-            }
-        ],
-        "flow": "flow_b",
-        "grounds_letter_available": False,
-        "appeal_available": False, # PRD FR-12: Offers NO appeal letter!
-    },
-}
-
-# Demo Case 3: MODERATE / FLOW C — Clause-less / Vague Rejection
-# Rejection letter gives generic repudiation without citing any policy clause.
-# System generates a formal Request-for-Grounds letter rather than guessing a clause.
-DEMO_CASE_3 = {
-    "analysis_id": "demo-case-3-vague-no-clause",
-    "status": "complete",
-    "claim_record": {
-        "insurer_name": "HDFC ERGO General Insurance",
-        "policy_number": "2801 2049 1928 0000",
-        "claim_reference": "HD/REP/2026/8921",
-        "claim_amount": 165000.0,
-        "rejection_date": "2026-08-20",
-        "stated_ground": "Claim repudiated as per terms and conditions of policy.",
-        "cited_clause_ref": None, # ABSENT! Drives Flow C
-        "policy_inception_date": "2023-01-15",
-        "continuous_months": 43,
-        "policyholder_name": "Vikram Malhotra",
-    },
-    "verdict": {
-        "level": "moderate",
-        "summary": "Your insurer has repudiated the claim without citing the specific clause or medical ground relied upon. A formal Request-for-Grounds letter is prepared.",
-        "reasons": [
-            "Your insurer has not stated which clause it relied on. Under IRDAI regulations, an insurer must state specific contractual grounds with clause citations.",
-            "A written demand for specific grounds and investigation findings has been generated."
-        ],
-        "evidence_trail": [
-            {
-                "id": "ev_demo3_1",
-                "statement": "Insurers are mandated to convey clear and reasoned grounds for claim repudiation.",
+                "statement": "Insurers are legally mandated to convey specific contractual grounds and operative policy clauses for claim repudiation.",
                 "source_type": "provision",
                 "provision_ref": "IRDAI Master Circular on Operations 2024 cl. 6 / Claim Settlement Norms",
-                "source_text": "[IRDAI Master Circular 2024 cl. 6]: Rejection of claims shall be made only after communicating specific grounds along with operative policy terms.",
+                "source_text": "[IRDAI Master Circular on Operations 2024 cl. 6]: Rejection of claims shall be made only after communicating specific grounds along with operative policy terms and conditions. Generic or clause-less repudiations violate regulatory standards.",
                 "ordinal": 1,
             }
         ],
@@ -150,11 +101,63 @@ DEMO_CASE_3 = {
     },
 }
 
+# Demo Case 3: STRONG VERDICT — Rejection Letter Cites a Clause That Does Not Exist in Policy
+# HDFC ERGO repudiation cites Clause 5.9, but Clause 5.9 does NOT exist in the policy wording.
+# System detects Clause/Policy Mismatch and generates official GRO Appeal.
+DEMO_CASE_3 = {
+    "analysis_id": "demo-case-3-clause-mismatch",
+    "status": "complete",
+    "claim_record": {
+        "insurer_name": "HDFC ERGO General Insurance",
+        "policy_number": "2801 2049 1928 0000",
+        "claim_reference": "HD/REP/2026/8921",
+        "claim_amount": 165000.0,
+        "rejection_date": "2026-08-20",
+        "stated_ground": "Repudiation under Clause 5.9: Treatment excluded under specific non-contracted waiting period schedule.",
+        "cited_clause_ref": "Clause 5.9", # CITED IN LETTER BUT ABSENT IN POLICY!
+        "policy_inception_date": "2023-01-15",
+        "continuous_months": 43,
+        "policyholder_name": "Vikram Malhotra",
+    },
+    "verdict": {
+        "level": "strong",
+        "summary": "Clause/Policy Mismatch: The insurer repudiated the claim citing 'Clause 5.9', but this clause does not exist anywhere in the policy wording.",
+        "reasons": [
+            "The insurer cited 'Clause 5.9' as the basis for claim repudiation, but verification against the policy wording confirms that this clause does not exist in the policy contract.",
+            "Under IRDAI regulations and insurance contract law, an insurer cannot reject a claim based on non-existent, uncontracted, or phantom policy terms.",
+            "An official Grievance Redressal Officer (GRO) appeal has been prepared demanding immediate withdrawal of the repudiation due to contractual invalidity.",
+        ],
+        "evidence_trail": [
+            {
+                "id": "ev_demo3_1",
+                "statement": "Clause 'Clause 5.9' cited in the rejection letter does not appear anywhere in the policy wording issued to the policyholder.",
+                "source_type": "provision",
+                "provision_ref": "Policy Document Audit / Clause Verification",
+                "source_text": "[Policy Document Audit]: The uploaded policy wording was audited for 'Clause 5.9'. No operative clause or exclusion matching this reference exists in the policy contract issued to the insured.",
+                "ordinal": 1,
+            },
+            {
+                "id": "ev_demo3_2",
+                "statement": "Insurers must substantiate claim repudiation under operative policy provisions; repudiation under non-existent terms is invalid.",
+                "source_type": "provision",
+                "provision_ref": "IRDAI Master Circular 2024 cl. 6 / Fair Repudiation Norms",
+                "source_text": "[IRDAI Master Circular 2024 cl. 6]: Rejection of claims shall be made only with reference to operative policy terms in the policyholder's contract. Citing non-existent clauses violates fair claims settlement standards.",
+                "ordinal": 2,
+            },
+        ],
+        "flow": "flow_a",
+        "grounds_letter_available": False,
+        "appeal_available": True,
+    },
+}
+
 DEMO_REGISTRY: Dict[str, Dict[str, Any]] = {
     "case-1": DEMO_CASE_1,
     "case-2": DEMO_CASE_2,
     "case-3": DEMO_CASE_3,
     "demo-case-1-strong-moratorium": DEMO_CASE_1,
+    "demo-case-2-no-clause": DEMO_CASE_2,
     "demo-case-2-weak-valid-rejection": DEMO_CASE_2,
+    "demo-case-3-clause-mismatch": DEMO_CASE_3,
     "demo-case-3-vague-no-clause": DEMO_CASE_3,
 }

@@ -136,3 +136,56 @@ def test_api_appeal_download_contains_policyholder_name():
     assert "Rajesh Kumar" in all_text
     assert "Star Health and Allied Insurance" in all_text
     assert "CIR/2026/161114/098711" in all_text
+
+
+def test_api_appeal_download_hindi_preserved():
+    """Integration test: Hindi language is preserved when downloading demo appeal PDF."""
+    res_gen = client.post("/api/analyses/demo-case-1-strong-moratorium/appeal", json={"language": "hi"})
+    assert res_gen.status_code == 200
+    doc_id = res_gen.json()["document_id"]
+
+    res_dl = client.get(f"/api/analyses/demo-case-1-strong-moratorium/appeal/{doc_id}")
+    assert res_dl.status_code == 200
+    assert res_dl.headers["content-type"] == "application/pdf"
+
+    doc = pymupdf.open(stream=res_dl.content, filetype="pdf")
+    all_text = "\n".join([page.get_text() for page in doc])
+    assert "शिकायत" in all_text
+    assert "Rajesh Kumar" in all_text
+
+
+def test_name_extractor_varieties():
+    """Verify various formats of policyholder/insured/proposer names are extracted accurately."""
+    from app.extraction.extractor import extract_policyholder_name_from_text
+
+    cases = [
+        ("Policyholder Name: Rajesh Kumar", "Rajesh Kumar"),
+        ("Policy Holder Name: Sneha Verma", "Sneha Verma"),
+        ("Name of Policyholder: Vikram Malhotra", "Vikram Malhotra"),
+        ("Insured Person: Dr. A. K. Sharma", "A. K. Sharma"),
+        ("Proposer Name: Mary-Jane Watson", "Mary-Jane Watson"),
+        ("Name of Claimant: Patrick O'Connor", "Patrick O'Connor"),
+        ("Patient: Abdul-Rahim Khan", "Abdul-Rahim Khan"),
+        ("To: Ms. Priya Nair", "Priya Nair"),
+        ("Dear Mr. Amit Shah,", "Amit Shah"),
+        ("Policyholder: Sunita Roy", "Sunita Roy"),
+        ("Policyholder Name | Rajesh Kumar", "Rajesh Kumar"),
+    ]
+    for text, expected in cases:
+        assert extract_policyholder_name_from_text(text) == expected
+
+
+def test_text_generators_match_preview():
+    """Verify plain text appeal generator matches preview card text."""
+    claim = StructuredClaimRecord(**DEMO_CASE_1["claim_record"])
+    verdict = Verdict(**DEMO_CASE_1["verdict"])
+
+    txt_en = generate_gro_appeal_text(claim, verdict, language="en")
+    assert "Rajesh Kumar" in txt_en
+    assert "P/161114/01/2021/008742" in txt_en
+    assert "CIR/2026/161114/098711" in txt_en
+    assert "Yours faithfully,\n\nRajesh Kumar" in txt_en
+
+    txt_hi = generate_gro_appeal_text(claim, verdict, language="hi")
+    assert "Rajesh Kumar" in txt_hi
+    assert "भवदीय,\n\nRajesh Kumar" in txt_hi

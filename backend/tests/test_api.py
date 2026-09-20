@@ -42,24 +42,29 @@ def test_pre_cached_demo_cases():
     assert d1["claim_record"]["continuous_months"] == 65
     assert len(d1["verdict"]["evidence_trail"]) >= 1
 
-    # Demo Case 2 (Weak - Flow B)
-    r2 = client.get("/api/analyses/demo-case-2-weak-valid-rejection")
+    # Demo Case 2 (Moderate - Flow C Clause-less)
+    r2 = client.get("/api/analyses/demo-case-2-no-clause")
     assert r2.status_code == 200
     d2 = r2.json()
-    assert d2["verdict"]["level"] == "weak"
+    assert d2["verdict"]["level"] == "moderate"
+    assert d2["verdict"]["flow"] == "flow_c"
+    assert d2["claim_record"]["cited_clause_ref"] is None
+    assert d2["grounds_letter_available"] is True
     assert d2["appeal_available"] is False
 
-    # Attempting to generate appeal on Weak case must be blocked (PRD FR-12)
-    r2_appeal = client.post("/api/analyses/demo-case-2-weak-valid-rejection/appeal", json={"language": "en"})
-    assert r2_appeal.status_code == 400
-    assert "Weak verdict" in r2_appeal.json()["detail"]
+    # Attempting to generate GRO appeal on clause-less case must produce grounds request
+    r2_appeal = client.post("/api/analyses/demo-case-2-no-clause/appeal", json={"language": "en"})
+    assert r2_appeal.status_code == 200
+    assert r2_appeal.json()["kind"] == "grounds_request"
 
-    # Demo Case 3 (Moderate - Flow C Clause-less)
-    r3 = client.get("/api/analyses/demo-case-3-vague-no-clause")
+    # Demo Case 3 (Strong - Clause/Policy Mismatch)
+    r3 = client.get("/api/analyses/demo-case-3-clause-mismatch")
     assert r3.status_code == 200
     d3 = r3.json()
-    assert d3["verdict"]["flow"] == "flow_c"
-    assert d3["grounds_letter_available"] is True
+    assert d3["verdict"]["level"] == "strong"
+    assert d3["verdict"]["flow"] == "flow_a"
+    assert "Clause/Policy Mismatch" in d3["verdict"]["summary"]
+    assert d3["verdict"]["appeal_available"] is True
 
 
 def test_full_pipeline_flow_a():
@@ -113,3 +118,118 @@ def test_full_pipeline_flow_a():
     # Verify session is permanently deleted
     res_gone = client.get(f"/api/analyses/{analysis_id}")
     assert res_gone.status_code == 404
+
+
+def test_full_pipeline_case_2_and_3():
+    """Full live pipeline on real generated Case 2 (Flow C / No Clause) and Case 3 (Mismatch) PDFs."""
+    # Test Case 2 (Flow C: Rejection Letter Does NOT Specify a Rejection Clause)
+    c2_let = assets_dir / "case_2_rejection_letter.pdf"
+    c2_pol = assets_dir / "case_2_policy_wording.pdf"
+
+    files_c2 = {
+        "rejection_letter": ("case_2_rejection_letter.pdf", c2_let.read_bytes(), "application/pdf"),
+        "policy_wording": ("case_2_policy_wording.pdf", c2_pol.read_bytes(), "application/pdf"),
+    }
+    res_c2 = client.post("/api/analyses", files=files_c2)
+    assert res_c2.status_code == 201
+    id_c2 = res_c2.json()["analysis_id"]
+
+    data_c2 = client.get(f"/api/analyses/{id_c2}").json()
+    assert data_c2["claim_record"]["policyholder_name"] == "Sneha Verma"
+    assert data_c2["claim_record"]["cited_clause_ref"] is None
+    assert data_c2["verdict"]["flow"] == "flow_c"
+    assert data_c2["verdict"]["level"] == "moderate"
+    assert data_c2["verdict"]["grounds_letter_available"] is True
+    assert data_c2["verdict"]["appeal_available"] is False
+    # Verifiable evidence trail must contain ONLY genuine relevant provision evidence, NO unrelated policy spans
+    for ev in data_c2["verdict"]["evidence_trail"]:
+        assert ev["source_type"] == "provision"
+
+    # Generate grounds request
+    res_appeal_c2 = client.post(f"/api/analyses/{id_c2}/appeal", json={"language": "en"})
+    assert res_appeal_c2.status_code == 200
+    assert res_appeal_c2.json()["kind"] == "grounds_request"
+    doc_id_c2 = res_appeal_c2.json()["document_id"]
+
+    # Download grounds request PDF
+    res_pdf_c2 = client.get(f"/api/analyses/{id_c2}/appeal/{doc_id_c2}")
+    assert res_pdf_c2.status_code == 200
+    assert res_pdf_c2.content.startswith(b"%PDF-")
+
+    # Test Case 3 (Flow A: Clause/Policy Mismatch - Rejection letter cites clause absent from policy)
+    c3_let = assets_dir / "case_3_rejection_letter.pdf"
+    c3_pol = assets_dir / "case_3_policy_wording.pdf"
+
+    files_c3 = {
+        "rejection_letter": ("case_3_rejection_letter.pdf", c3_let.read_bytes(), "application/pdf"),
+        "policy_wording": ("case_3_policy_wording.pdf", c3_pol.read_bytes(), "application/pdf"),
+    }
+    res_c3 = client.post("/api/analyses", files=files_c3)
+    assert res_c3.status_code == 201
+    id_c3 = res_c3.json()["analysis_id"]
+
+    data_c3 = client.get(f"/api/analyses/{id_c3}").json()
+    assert data_c3["claim_record"]["policyholder_name"] == "Vikram Malhotra"
+    assert data_c3["claim_record"]["cited_clause_ref"] == "Clause 5.9"
+    assert data_c3["verdict"]["flow"] == "flow_a"
+    assert data_c3["verdict"]["level"] == "strong"
+    assert "Clause/Policy Mismatch" in data_c3["verdict"]["summary"]
+    assert data_c3["verdict"]["appeal_available"] is True
+    # Verifiable evidence trail must establish mismatch with document audit and regulatory provision
+    trail = data_c3["verdict"]["evidence_trail"]
+    assert len(trail) >= 2
+    assert any("Policy Document Audit" in ev["provision_ref"] for ev in trail)
+    assert any("IRDAI" in ev["provision_ref"] for ev in trail)
+
+    # Generate GRO appeal for clause mismatch
+    res_appeal_c3 = client.post(f"/api/analyses/{id_c3}/appeal", json={"language": "en"})
+    assert res_appeal_c3.status_code == 200
+    assert res_appeal_c3.json()["kind"] == "gro_letter"
+    doc_id_c3 = res_appeal_c3.json()["document_id"]
+
+    # Download GRO appeal PDF
+    res_pdf_c3 = client.get(f"/api/analyses/{id_c3}/appeal/{doc_id_c3}")
+    assert res_pdf_c3.status_code == 200
+    assert res_pdf_c3.content.startswith(b"%PDF-")
+
+
+def test_fallback_policyholder_name_from_policy_wording():
+    """Verify that if rejection letter does not mention policyholder, it is extracted from policy wording."""
+    from reportlab.platypus import SimpleDocTemplate, Paragraph
+    from reportlab.lib.styles import getSampleStyleSheet
+    import io
+
+    # Create unaddressed letter
+    buf_let = io.BytesIO()
+    doc_let = SimpleDocTemplate(buf_let)
+    styles = getSampleStyleSheet()
+    doc_let.build([
+        Paragraph("STAR HEALTH AND ALLIED INSURANCE CO. LTD.", styles["Heading1"]),
+        Paragraph("Date: 14/08/2026", styles["Normal"]),
+        Paragraph("Policy Number: P/161114/01/2021/008742", styles["Normal"]),
+        Paragraph("Claim Reference: CIR/2026/161114/098711", styles["Normal"]),
+        Paragraph("Inception Date: 01/03/2021 | Continuous Months: 65 months", styles["Normal"]),
+        Paragraph("SUB: REPUDIATION OF CLAIM UNDER POLICY CLAUSE 4.2", styles["Normal"]),
+        Paragraph("Dear Policyholder, your claim is repudiated under Clause 4.2.", styles["Normal"]),
+    ])
+
+    # Create policy schedule with policyholder name on page 1
+    buf_pol = io.BytesIO()
+    doc_pol = SimpleDocTemplate(buf_pol)
+    doc_pol.build([
+        Paragraph("STAR HEALTH COMPREHENSIVE INSURANCE POLICY SCHEDULE", styles["Heading1"]),
+        Paragraph("Policyholder Name: Ananya Mukherjee", styles["Normal"]),
+        Paragraph("Policy Number: P/161114/01/2021/008742", styles["Normal"]),
+        Paragraph("Section 4: Exclusions Clause 4.2 Pre-Existing Diseases", styles["Normal"]),
+    ])
+
+    files = {
+        "rejection_letter": ("unaddressed_letter.pdf", buf_let.getvalue(), "application/pdf"),
+        "policy_wording": ("policy_schedule.pdf", buf_pol.getvalue(), "application/pdf"),
+    }
+    res = client.post("/api/analyses", files=files)
+    assert res.status_code == 201
+    analysis_id = res.json()["analysis_id"]
+
+    data = client.get(f"/api/analyses/{analysis_id}").json()
+    assert data["claim_record"]["policyholder_name"] == "Ananya Mukherjee"

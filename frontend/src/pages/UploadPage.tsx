@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileText, AlertCircle, Sparkles, Check, ArrowRight, Shield } from 'lucide-react';
+import { UploadCloud, FileText, AlertCircle, Sparkles, ArrowRight, Shield } from 'lucide-react';
 import { api, AnalysisResponse } from '../api/client';
+import { useLanguage } from '../context/LanguageContext';
 
 interface UploadPageProps {
   onAnalysisStarted: (analysisData: AnalysisResponse) => void;
-  language: string;
+  language?: string;
 }
 
-export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, language }) => {
+export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, language: propLang }) => {
+  const { language, t } = useLanguage();
+  const effectiveLang = propLang || language;
+
   const [letterFile, setLetterFile] = useState<File | null>(null);
   const [policyFile, setPolicyFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,7 +20,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!letterFile || !policyFile) {
-      setErrorMsg('Please upload both the rejection letter and the policy wording PDF.');
+      setErrorMsg(t('upload.error_both_files'));
       return;
     }
 
@@ -24,11 +28,11 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
     setLoading(true);
 
     try {
-      const { analysis_id } = await api.startAnalysis(letterFile, policyFile, language);
+      const { analysis_id } = await api.startAnalysis(letterFile, policyFile, effectiveLang);
       const data = await api.getAnalysis(analysis_id);
       onAnalysisStarted(data);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Analysis could not be completed.');
+      setErrorMsg(err.message || t('upload.error_analysis_failed'));
     } finally {
       setLoading(false);
     }
@@ -41,7 +45,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
       const data = await api.getAnalysis(demoId);
       onAnalysisStarted(data);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to load demo case.');
+      setErrorMsg(err.message || t('upload.error_demo_failed'));
     } finally {
       setLoading(false);
     }
@@ -53,13 +57,13 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
       <div className="text-center space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-200 text-brand-700 text-xs font-semibold">
           <Shield className="w-3.5 h-3.5" />
-          <span>Patient-Side InsurTech Advocate · Free for Individuals</span>
+          <span>{t('upload.hero_badge')}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Contest an Unjust Health Insurance Claim Rejection
+          {t('upload.hero_title')}
         </h1>
         <p className="text-slate-600 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
-          Upload your rejection letter and policy wording. Pratikar locates the cited clause verbatim, tests it against coded IRDAI regulations, and drafts a ready-to-file appeal.
+          {t('upload.hero_desc')}
         </p>
       </div>
 
@@ -69,10 +73,10 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-              Demo Day Fast Path (Instant Verification)
+              {t('upload.fast_path_title')}
             </span>
           </div>
-          <span className="text-xs text-slate-400 font-mono">&lt; 5s Response Time</span>
+          <span className="text-xs text-slate-400 font-mono">{t('upload.fast_path_time')}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
           <button
@@ -81,37 +85,49 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
             disabled={loading}
             className="p-3 bg-white/10 hover:bg-white/15 active:bg-white/20 border border-white/10 rounded-xl text-left transition-all group"
           >
-            <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wide">Flow A: Strong Verdict</div>
-            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
-              60-Month Moratorium Violation
+            <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wide">
+              {t('upload.demo1_tag')}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Pre-existing disease rejection after 65 months</div>
+            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
+              {t('upload.demo1_title')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {t('upload.demo1_desc')}
+            </div>
           </button>
 
           <button
             type="button"
-            onClick={() => loadDemoCase('demo-case-2-weak-valid-rejection')}
+            onClick={() => loadDemoCase('demo-case-2-no-clause')}
             disabled={loading}
             className="p-3 bg-white/10 hover:bg-white/15 active:bg-white/20 border border-white/10 rounded-xl text-left transition-all group"
           >
-            <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">Flow B: Weak Verdict</div>
-            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
-              Valid Rejection (30-Day Limit)
+            <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wide">
+              {t('upload.demo2_tag')}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Honest decline; no pointless appeal generated</div>
+            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
+              {t('upload.demo2_title')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {t('upload.demo2_desc')}
+            </div>
           </button>
 
           <button
             type="button"
-            onClick={() => loadDemoCase('demo-case-3-vague-no-clause')}
+            onClick={() => loadDemoCase('demo-case-3-clause-mismatch')}
             disabled={loading}
             className="p-3 bg-white/10 hover:bg-white/15 active:bg-white/20 border border-white/10 rounded-xl text-left transition-all group"
           >
-            <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wide">Flow C: Clause-less</div>
-            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
-              Vague Letter (No Clause)
+            <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wide">
+              {t('upload.demo3_tag')}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">Generates Request-for-Grounds letter</div>
+            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
+              {t('upload.demo3_title')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {t('upload.demo3_desc')}
+            </div>
           </button>
         </div>
       </div>
@@ -122,7 +138,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
           {/* File 1: Rejection Letter */}
           <div className="space-y-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              1. Rejection Letter (Photo or PDF) <span className="text-rose-500">*</span>
+              {t('upload.label_letter')} <span className="text-rose-500">*</span>
             </label>
             <div className="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center transition-colors bg-slate-50/50">
               <input
@@ -135,9 +151,9 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
               <label htmlFor="rejectionLetter" className="cursor-pointer block space-y-2">
                 <UploadCloud className="w-8 h-8 text-brand-600 mx-auto" />
                 <div className="text-xs sm:text-sm font-semibold text-slate-700">
-                  {letterFile ? letterFile.name : 'Choose file or drag & drop'}
+                  {letterFile ? letterFile.name : t('upload.choose_file_letter')}
                 </div>
-                <div className="text-[11px] text-slate-500">PDF, JPG, or PNG (Max 25 MB)</div>
+                <div className="text-[11px] text-slate-500">{t('upload.hint_letter')}</div>
               </label>
             </div>
           </div>
@@ -145,7 +161,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
           {/* File 2: Policy Wording */}
           <div className="space-y-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              2. Policy Wording PDF <span className="text-rose-500">*</span>
+              {t('upload.label_policy')} <span className="text-rose-500">*</span>
             </label>
             <div className="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center transition-colors bg-slate-50/50">
               <input
@@ -158,9 +174,9 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
               <label htmlFor="policyWording" className="cursor-pointer block space-y-2">
                 <FileText className="w-8 h-8 text-brand-600 mx-auto" />
                 <div className="text-xs sm:text-sm font-semibold text-slate-700">
-                  {policyFile ? policyFile.name : 'Choose digital policy PDF'}
+                  {policyFile ? policyFile.name : t('upload.choose_file_policy')}
                 </div>
-                <div className="text-[11px] text-slate-500">40–80 page digital PDF issued by insurer</div>
+                <div className="text-[11px] text-slate-500">{t('upload.hint_policy')}</div>
               </label>
             </div>
           </div>
@@ -176,7 +192,8 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
 
         {/* Privacy and Consent Statement (SEC-07) */}
         <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-[11px] leading-relaxed">
-          <span className="font-semibold text-slate-700">Privacy Notice:</span> Documents live only for this single session and are discarded at the end of the analysis. No personal data is retained or used for model training.
+          <span className="font-semibold text-slate-700">{t('upload.privacy_notice_title')}</span>{' '}
+          {t('upload.privacy_notice_desc')}
         </div>
 
         {/* Submit button */}
@@ -188,11 +205,11 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
           {loading ? (
             <span className="flex items-center gap-2">
               <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-              Analyzing Documents & IRDAI Provisions...
+              {t('upload.btn_analyzing')}
             </span>
           ) : (
             <>
-              <span>Extract & Verify Claim Facts</span>
+              <span>{t('upload.btn_submit')}</span>
               <ArrowRight className="w-4 h-4" />
             </>
           )}

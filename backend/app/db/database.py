@@ -78,15 +78,34 @@ class SessionDatabase:
             }
 
     def store_generated_doc(self, analysis_id: str, doc_id: str, kind: str, pdf_bytes: bytes, language: str = "en"):
-        if analysis_id in self.sessions:
-            self.sessions[analysis_id]["generated_docs"][doc_id] = {
-                "kind": kind,
-                "bytes": pdf_bytes,
+        if analysis_id not in self.sessions:
+            # For demo cases or pre-cached sessions, create a persistent session container
+            ttl_minutes = settings.SESSION_TTL_MINUTES
+            self.sessions[analysis_id] = {
+                "analysis_id": analysis_id,
+                "created_at": datetime.now(timezone.utc),
+                "expires_at": datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
+                "status": "complete",
+                "claim_record": None,
+                "policy_chunks": [],
+                "verdict": None,
+                "generated_docs": {},
+                "uploaded_files": {},
                 "language": language,
+                "error": None,
             }
+
+        self.sessions[analysis_id]["generated_docs"][doc_id] = {
+            "kind": kind,
+            "bytes": pdf_bytes,
+            "language": language,
+        }
 
     def get_generated_doc(self, analysis_id: str, doc_id: str) -> Optional[Dict[str, Any]]:
         session = self.get_session(analysis_id)
+        if not session:
+            # Also check direct map for demo cases
+            session = self.sessions.get(analysis_id)
         if not session:
             return None
         return session.get("generated_docs", {}).get(doc_id)

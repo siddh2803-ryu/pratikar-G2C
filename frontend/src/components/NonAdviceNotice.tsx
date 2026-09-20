@@ -1,11 +1,14 @@
 import React from 'react';
-import { Clock, AlertCircle, Scale, Calendar } from 'lucide-react';
+import { Clock, AlertCircle } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface NonAdviceNoticeProps {
-  language: string;
+  language?: string;
 }
 
-export const NonAdviceNotice: React.FC<NonAdviceNoticeProps> = ({ language }) => {
+export const NonAdviceNotice: React.FC<NonAdviceNoticeProps> = () => {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -16,16 +19,16 @@ export const NonAdviceNotice: React.FC<NonAdviceNoticeProps> = ({ language }) =>
           </div>
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-              {language === 'hi' ? 'वैधानिक समय-सीमा' : 'Applicable Statutory Deadlines'}
+              {t('notices.deadlines_title')}
             </h4>
             <div className="mt-1 space-y-1 text-xs text-slate-700">
               <p className="flex items-center gap-1.5 font-medium">
                 <span className="w-2 h-2 rounded-full bg-brand-600"></span>
-                <b>15 Days:</b> Insurer GRO must resolve grievance in writing.
+                <b>{t('notices.deadline_15_days_label')}</b> {t('notices.deadline_15_days_desc')}
               </p>
               <p className="flex items-center gap-1.5 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                <b>1 Year:</b> From GRO rejection to file with Insurance Ombudsman.
+                <b>{t('notices.deadline_1_year_label')}</b> {t('notices.deadline_1_year_desc')}
               </p>
             </div>
           </div>
@@ -38,12 +41,10 @@ export const NonAdviceNotice: React.FC<NonAdviceNoticeProps> = ({ language }) =>
           </div>
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-              {language === 'hi' ? 'कानूनी गैर-सलाह घोषणा' : 'Non-Advice Regulatory Notice'}
+              {t('notices.non_advice_title')}
             </h4>
             <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-              {language === 'hi'
-                ? 'यह सेवा कानूनी प्रतिनिधित्व प्रदान नहीं करती है। यह उपयोगकर्ता द्वारा प्रस्तुत पॉलिसी और आईआरडीएआई नियमों के आधार पर दस्तावेज तैयार करती है। उपयोगकर्ता दस्तावेज स्वयं दाखिल करता है।'
-                : 'Pratikar is an assisted self-filing document preparation engine. It does not provide formal legal advice or representation. All appeal documents must be reviewed and submitted directly by the policyholder.'}
+              {t('notices.non_advice_desc')}
             </p>
           </div>
         </div>
