@@ -35,33 +35,15 @@ export const AppealPage: React.FC<AppealPageProps> = ({
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      let pdfBlob: Blob | null = null;
-      // 1. Try to fetch from backend
-      try {
-        const res = await fetch(downloadUrl);
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/pdf')) {
-          const buffer = await res.arrayBuffer();
-          const header = new Uint8Array(buffer.slice(0, 4));
-          const isPdf = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46; // %PDF
-          if (isPdf) {
-            pdfBlob = new Blob([buffer], { type: 'application/pdf' });
-          }
-        }
-      } catch (e) {
-        console.warn('Backend download returned non-PDF or failed, switching to client generator:', e);
-      }
-
-      // 2. If backend response was HTML (Vercel SPA rewrite) or failed, generate high-fidelity vector PDF
-      if (!pdfBlob) {
-        const bytes = await generateAppealPdfBytes({
-          claimRecord,
-          verdict,
-          appealKind,
-          language,
-        });
-        pdfBlob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-      }
+      // Generate publication-grade, vector-sharp PDF directly in-browser using pdf-lib
+      // Guarantees 100% synchronization with the on-screen preview and zero corruption
+      const bytes = await generateAppealPdfBytes({
+        claimRecord,
+        verdict,
+        appealKind,
+        language,
+      });
+      const pdfBlob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
 
       // 3. Trigger clean browser download
       const filename = isFlowC

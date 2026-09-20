@@ -251,7 +251,7 @@ async function buildPdfBytes(analysis: any): Promise<Uint8Array> {
   // 2. Addressee
   page.drawText('To,', { x: margin, y, size: 9.5, font: helveticaBold, color: rgb(0.2, 0.2, 0.2) });
   y -= 14;
-  page.drawText('The Grievance Redressal Officer (GRO) / Claims Review Department', {
+  page.drawText('The Grievance Redressal Officer (GRO) / Claims Department', {
     x: margin,
     y,
     size: 9.5,
@@ -427,7 +427,7 @@ async function buildPdfBytes(analysis: any): Promise<Uint8Array> {
   }
 
   // 7. Signoff
-  page.drawText('Yours sincerely,', {
+  page.drawText('Yours faithfully,', {
     x: margin,
     y,
     size: 9.5,
