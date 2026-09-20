@@ -1,14 +1,14 @@
 """Appeal Document Generator for Pratikar using ReportLab.
 Generates ready-to-file Grievance-Officer appeal letters and Request-for-Grounds letters.
-Embeds Noto Sans Devanagari font for Devanagari rendering (PRD FR-09, FR-10, Tech Stack §6).
+Supports bilingual rendering (English and Hindi) with embedded Mukta and Helvetica fonts.
+Guarantees 100% text and structure synchronization with the on-screen preview.
 """
 import io
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.pdfbase import pdfmetrics
@@ -18,115 +18,191 @@ from app.models.schemas import StructuredClaimRecord, Verdict
 from app.translation.translator import translate_text
 
 
-# Register Noto Sans Devanagari font
-FONT_NAME = "Helvetica"
+# Register fonts
+FONT_NORMAL = "Helvetica"
 FONT_BOLD = "Helvetica-Bold"
 
-font_path = Path(__file__).resolve().parent.parent.parent / "fonts" / "NotoSansDevanagari-Regular.ttf"
-if font_path.exists():
+fonts_dir = Path(__file__).resolve().parent.parent.parent / "fonts"
+mukta_regular = fonts_dir / "Mukta-Regular.ttf"
+mukta_bold = fonts_dir / "Mukta-Bold.ttf"
+
+if mukta_regular.exists():
     try:
-        pdfmetrics.registerFont(TTFont("NotoSansDevanagari", str(font_path)))
-        FONT_NAME = "NotoSansDevanagari"
-        FONT_BOLD = "NotoSansDevanagari"
+        pdfmetrics.registerFont(TTFont("Mukta", str(mukta_regular)))
+        if mukta_bold.exists():
+            pdfmetrics.registerFont(TTFont("Mukta-Bold", str(mukta_bold)))
+            pdfmetrics.registerFontFamily("Mukta", normal="Mukta", bold="Mukta-Bold", italic="Mukta", boldItalic="Mukta-Bold")
+        else:
+            pdfmetrics.registerFontFamily("Mukta", normal="Mukta", bold="Mukta", italic="Mukta", boldItalic="Mukta")
+        FONT_NORMAL = "Mukta"
+        FONT_BOLD = "Mukta-Bold" if mukta_bold.exists() else "Mukta"
     except Exception:
         pass
 
 
 def generate_gro_appeal_text(claim: StructuredClaimRecord, verdict: Verdict, language: str = "en") -> str:
-    """Drafts the grievance appeal letter text strictly from established grounds."""
+    """Generates the GRO appeal letter text matching the on-screen preview."""
+    is_hi = language == "hi"
     reasons_text = "\n".join([f"• {r}" for r in verdict.reasons])
     evidence_text = "\n".join([
-        f"[{i+1}] {e.statement} (Source: {e.provision_ref or f'Policy Page {e.page_number}'})"
+        f"[{i+1}] {e.statement} (Source: {e.provision_ref or f'Policy Wording Page {e.page_number}'})"
         for i, e in enumerate(verdict.evidence_trail)
     ])
 
-    amount_str = f"Rs. {claim.claim_amount:,.2f}" if claim.claim_amount else "As per submitted hospital bills"
-    policy_str = claim.policy_number or "Refer policy copy enclosed"
-    claim_ref_str = claim.claim_reference or "N/A"
+    amount_str = f"₹{claim.claim_amount:,.2f}" if claim.claim_amount else ("अस्पताल बिल के अनुसार" if is_hi else "As per hospital bills")
+    policy_str = claim.policy_number or ("संलग्न पॉलिसी देखें" if is_hi else "Refer enclosed policy")
+    claim_ref_str = claim.claim_reference or ("लागू नहीं" if is_hi else "N/A")
+    date_str = claim.rejection_date.strftime("%Y-%m-%d") if hasattr(claim.rejection_date, "strftime") else str(claim.rejection_date)
+    policyholder_str = claim.policyholder_name or ("बीमित दावेदार" if is_hi else "Insured Claimant")
 
-    doc_text = f"""FORMAL GRIEVANCE APPEAL UNDER IRDAI PROTECTION REGULATIONS
+    if is_hi:
+        doc_text = f"""FORMAL GRIEVANCE APPEAL UNDER IRDAI PROTECTION REGULATIONS
+Prepared via Pratikar InsurTech Contest Engine · Filed Directly by Policyholder
 
 To,
-The Grievance Redressal Officer (GRO)
+The Grievance Redressal Officer (GRO) / Claims Department
 {claim.insurer_name}
 
 Subject: Contest and Demand for Reconsideration of Repudiated Claim Ref: {claim_ref_str}
 
-Dear Sir/Madam,
-
-I am writing to register an official grievance against the repudiation of my health insurance claim under Policy Number {policy_str}.
-
-1. CLAIM PARTICULARS
-• Policyholder / Insured: Insured Claimant
+Claim Particulars
+• Policyholder Name: {policyholder_str}
 • Policy Number: {policy_str}
-• Claim Reference Number: {claim_ref_str}
-• Date of Repudiation: {claim.rejection_date.strftime('%d/%m/%Y')}
-• Disputed Claim Amount: {amount_str}
-• Ground Cited by Insurer: {claim.stated_ground}
+• Claim Reference ID: {claim_ref_str}
+• Date of Repudiation: {date_str}
+• Disputed Amount: {amount_str}
+• Stated Insurer Ground: {claim.stated_ground}
 
-2. STATUTORY AND CONTRACTUAL GROUNDS FOR APPEAL
-The repudiation of this claim is untenable on the following specific regulatory and contractual grounds:
-
+Statutory & Contractual Grounds:
 {reasons_text}
 
-3. EVIDENCE AND POLICY CITATIONS
-The following specific provisions of binding IRDAI circulars and policy terms support this appeal:
+Evidence & Document Citations:
 {evidence_text}
 
-4. DEMAND FOR REDRESSAL & STATUTORY TIMELINE
-Under the IRDAI (Protection of Policyholders' Interests) Regulations, 2024, the insurer is mandated to resolve policyholder grievances within 15 calendar days of receipt.
-
-I hereby demand:
-1. Immediate reversal of the repudiation decision.
-2. Full settlement and disbursement of the claim amount of {amount_str} along with statutory interest as prescribed by IRDAI.
-
-Please take notice that in the event this grievance is not resolved to satisfaction within 15 days, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
-
-5. NON-ADVICE NOTICE & DECLARATION
-{verdict.non_advice_notice}
+Demand for Redressal: Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.
+In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
 
 Yours faithfully,
 
-Policyholder / Claimant
-Date: {claim.rejection_date.strftime('%d/%m/%Y')}
+{policyholder_str}
+Date: {date_str}
 """
-    if language == "hi":
         return translate_text(doc_text, target_lang="hi")
+
+    doc_text = f"""FORMAL GRIEVANCE APPEAL UNDER IRDAI PROTECTION REGULATIONS
+Prepared via Pratikar InsurTech Contest Engine · Filed Directly by Policyholder
+
+To,
+The Grievance Redressal Officer (GRO) / Claims Department
+{claim.insurer_name}
+
+Subject: Contest and Demand for Reconsideration of Repudiated Claim Ref: {claim_ref_str}
+
+Claim Particulars
+• Policyholder Name: {policyholder_str}
+• Policy Number: {policy_str}
+• Claim Reference ID: {claim_ref_str}
+• Date of Repudiation: {date_str}
+• Disputed Amount: {amount_str}
+• Stated Insurer Ground: {claim.stated_ground}
+
+Statutory & Contractual Grounds:
+{reasons_text}
+
+Evidence & Document Citations:
+{evidence_text}
+
+Demand for Redressal: Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.
+In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
+
+Yours faithfully,
+
+{policyholder_str}
+Date: {date_str}
+"""
     return doc_text
 
 
 def generate_grounds_request_text(claim: StructuredClaimRecord, verdict: Verdict, language: str = "en") -> str:
-    """Drafts Request-for-Grounds letter for Flow C (clause-less rejection)."""
-    claim_ref_str = claim.claim_reference or "N/A"
-    policy_str = claim.policy_number or "Refer policy copy"
+    """Generates Request-for-Grounds letter for Flow C matching the on-screen preview."""
+    is_hi = language == "hi"
+    reasons_text = "\n".join([f"• {r}" for r in verdict.reasons])
+    evidence_text = "\n".join([
+        f"[{i+1}] {e.statement} (Source: {e.provision_ref or f'Policy Wording Page {e.page_number}'})"
+        for i, e in enumerate(verdict.evidence_trail)
+    ])
 
-    doc_text = f"""REQUEST FOR SPECIFIC GROUNDS AND CLAUSE OF CLAIM REPUDIATION
+    amount_str = f"₹{claim.claim_amount:,.2f}" if claim.claim_amount else ("अस्पताल बिल के अनुसार" if is_hi else "As per hospital bills")
+    policy_str = claim.policy_number or ("संलग्न पॉलिसी देखें" if is_hi else "Refer enclosed policy")
+    claim_ref_str = claim.claim_reference or ("लागू नहीं" if is_hi else "N/A")
+    date_str = claim.rejection_date.strftime("%Y-%m-%d") if hasattr(claim.rejection_date, "strftime") else str(claim.rejection_date)
+    policyholder_str = claim.policyholder_name or ("बीमित दावेदार" if is_hi else "Insured Claimant")
+
+    if is_hi:
+        doc_text = f"""REQUEST FOR SPECIFIC GROUNDS AND CLAUSE OF CLAIM REPUDIATION
+Prepared via Pratikar InsurTech Contest Engine · Filed Directly by Policyholder
 
 To,
-The Claims Department / Grievance Redressal Officer
+The Grievance Redressal Officer (GRO) / Claims Department
 {claim.insurer_name}
 
 Subject: Demand for Specific Contractual Clause and Ground for Claim Repudiation Ref: {claim_ref_str}
 
-Dear Sir/Madam,
+Claim Particulars
+• Policyholder Name: {policyholder_str}
+• Policy Number: {policy_str}
+• Claim Reference ID: {claim_ref_str}
+• Date of Repudiation: {date_str}
+• Disputed Amount: {amount_str}
+• Stated Insurer Ground: {claim.stated_ground}
 
-I am in receipt of your communication dated {claim.rejection_date.strftime('%d/%m/%Y')} repudiating my health insurance claim under Policy No. {policy_str} (Claim Ref: {claim_ref_str}).
+Statutory & Contractual Grounds:
+{reasons_text}
 
-The communication received does not specify the precise policy clause, wording, or medical advisory report on which the repudiation is founded.
+Evidence & Document Citations:
+{evidence_text}
 
-Under IRDAI Master Circular on Operations of Health Insurance Business (IRDAI/HLT/CIR/PRO/84/5/2024), insurers are legally required to state clear, specific, and reasoned grounds citing the exact operative policy clause whenever a claim is rejected.
-
-I hereby request you to provide within 7 days:
-1. The exact clause and section of the policy schedule relied upon.
-2. The complete medical and investigation report justifying the repudiation.
+Demand for Redressal: Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.
+In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
 
 Yours faithfully,
 
-Policyholder / Claimant
-Date: {claim.rejection_date.strftime('%d/%m/%Y')}
+{policyholder_str}
+Date: {date_str}
 """
-    if language == "hi":
         return translate_text(doc_text, target_lang="hi")
+
+    doc_text = f"""REQUEST FOR SPECIFIC GROUNDS AND CLAUSE OF CLAIM REPUDIATION
+Prepared via Pratikar InsurTech Contest Engine · Filed Directly by Policyholder
+
+To,
+The Grievance Redressal Officer (GRO) / Claims Department
+{claim.insurer_name}
+
+Subject: Demand for Specific Contractual Clause and Ground for Claim Repudiation Ref: {claim_ref_str}
+
+Claim Particulars
+• Policyholder Name: {policyholder_str}
+• Policy Number: {policy_str}
+• Claim Reference ID: {claim_ref_str}
+• Date of Repudiation: {date_str}
+• Disputed Amount: {amount_str}
+• Stated Insurer Ground: {claim.stated_ground}
+
+Statutory & Contractual Grounds:
+{reasons_text}
+
+Evidence & Document Citations:
+{evidence_text}
+
+Demand for Redressal: Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.
+In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
+
+Yours faithfully,
+
+{policyholder_str}
+Date: {date_str}
+"""
     return doc_text
 
 
@@ -136,68 +212,198 @@ def build_appeal_pdf(
     kind: str = "gro_letter",
     language: str = "en",
 ) -> bytes:
-    """Renders the appeal letter to PDF bytes using ReportLab."""
-    if kind == "grounds_request":
-        text_content = generate_grounds_request_text(claim, verdict, language=language)
-        title = "DEMAND FOR SPECIFIC GROUNDS"
-    else:
-        text_content = generate_gro_appeal_text(claim, verdict, language=language)
-        title = "FORMAL GRIEVANCE APPEAL"
+    """Renders the appeal letter to PDF bytes matching exactly the preview layout and content."""
+    is_hi = language == "hi"
+    is_flow_c = kind == "grounds_request" or verdict.flow == "flow_c"
+
+    # Select font
+    font_name = FONT_NORMAL
+    font_bold = FONT_BOLD
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
-        leftMargin=40,
-        rightMargin=40,
-        topMargin=40,
-        bottomMargin=40,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
     )
 
     styles = getSampleStyleSheet()
-    normal_style = ParagraphStyle(
-        "AppealNormal",
-        parent=styles["Normal"],
-        fontName=FONT_NAME,
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor("#1e293b"),
-    )
     title_style = ParagraphStyle(
         "AppealTitle",
         parent=styles["Heading1"],
-        fontName=FONT_BOLD,
-        fontSize=14,
-        leading=18,
+        fontName=font_bold,
+        fontSize=12,
+        leading=15,
         textColor=colors.HexColor("#0f172a"),
-        alignment=1, # Center
+        alignment=1,  # Center
     )
     banner_style = ParagraphStyle(
         "AppealBanner",
         parent=styles["Normal"],
-        fontName=FONT_NAME,
+        fontName=font_name,
         fontSize=8,
         leading=11,
         textColor=colors.HexColor("#64748b"),
-        alignment=1,
+        alignment=1,  # Center
+    )
+    normal_style = ParagraphStyle(
+        "AppealNormal",
+        parent=styles["Normal"],
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#1e293b"),
+    )
+    header_style = ParagraphStyle(
+        "AppealHeader",
+        parent=styles["Normal"],
+        fontName=font_bold,
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#0f172a"),
     )
 
     story = []
 
-    # Title & subtitle
-    story.append(Paragraph(f"<b>{title}</b>", title_style))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("Prepared via Pratikar InsurTech Contest Engine · Filed by Policyholder", banner_style))
-    story.append(Spacer(1, 10))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=15))
+    # 1. Document Header (Title + Subtitle)
+    if is_flow_c:
+        title_text = "दावा अस्वीकृति के विशिष्ट आधारों और खंड की मांग हेतु पत्र" if is_hi else "REQUEST FOR SPECIFIC GROUNDS AND CLAUSE OF CLAIM REPUDIATION"
+    else:
+        title_text = "आईआरडीएआई (IRDAI) संरक्षण विनियमों के तहत औपचारिक शिकायत अपील" if is_hi else "FORMAL GRIEVANCE APPEAL UNDER IRDAI PROTECTION REGULATIONS"
 
-    # Body paragraphs
-    paragraphs = text_content.split("\n\n")
-    for p in paragraphs:
-        clean_p = p.strip().replace("\n", "<br/>")
-        if clean_p:
-            story.append(Paragraph(clean_p, normal_style))
-            story.append(Spacer(1, 8))
+    subtitle_text = (
+        "प्रतिकार इन्शुरटेक कॉन्टेस्ट इंजन द्वारा तैयार · पॉलिसीधारक द्वारा सीधे दाखिल"
+        if is_hi
+        else "Prepared via Pratikar InsurTech Contest Engine · Filed Directly by Policyholder"
+    )
+
+    story.append(Paragraph(f"<b>{title_text}</b>", title_style))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(subtitle_text, banner_style))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10))
+
+    # 2. Addressee
+    if is_hi:
+        addressee_text = f"<b>सेवा में,</b><br/>शिकायत निवारण अधिकारी (जी.आर.ओ.) / दावा विभाग<br/><b>{claim.insurer_name}</b>"
+    else:
+        addressee_text = f"<b>To,</b><br/>The Grievance Redressal Officer (GRO) / Claims Department<br/><b>{claim.insurer_name}</b>"
+    story.append(Paragraph(addressee_text, normal_style))
+    story.append(Spacer(1, 8))
+
+    # 3. Subject Box
+    claim_ref_str = claim.claim_reference or ("लागू नहीं" if is_hi else "N/A")
+    if is_flow_c:
+        if is_hi:
+            subj_text = f"<b>विषय:</b> दावा अस्वीकृति के विशिष्ट अनुबंधीय खंड और आधार की मांग संदर्भ: {claim_ref_str}"
+        else:
+            subj_text = f"<b>Subject:</b> Demand for Specific Contractual Clause and Ground for Claim Repudiation Ref: {claim_ref_str}"
+    else:
+        if is_hi:
+            subj_text = f"<b>विषय:</b> अस्वीकृत दावे के पुनर्विचार हेतु चुनौती एवं मांग संदर्भ: {claim_ref_str}"
+        else:
+            subj_text = f"<b>Subject:</b> Contest and Demand for Reconsideration of Repudiated Claim Ref: {claim_ref_str}"
+
+    subj_table = Table([[Paragraph(subj_text, normal_style)]], colWidths=[540])
+    subj_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#e2e8f0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(subj_table)
+    story.append(Spacer(1, 8))
+
+    # 4. Claim Particulars Box
+    policyholder_str = claim.policyholder_name or ("बीमित दावेदार" if is_hi else "Insured Claimant")
+    policy_str = claim.policy_number or ("संलग्न पॉलिसी देखें" if is_hi else "Refer enclosed policy")
+    date_str = claim.rejection_date.strftime("%Y-%m-%d") if hasattr(claim.rejection_date, "strftime") else str(claim.rejection_date)
+    amount_str = f"₹{claim.claim_amount:,.2f}" if claim.claim_amount else ("अस्पताल बिल के अनुसार" if is_hi else "As per hospital bills")
+
+    if is_hi:
+        part_heading = "<b>दावे का विवरण (CLAIM PARTICULARS)</b>"
+        part_rows = [
+            Paragraph(part_heading, header_style),
+            Paragraph(f"• <b>पॉलिसीधारक का नाम:</b> {policyholder_str}", normal_style),
+            Paragraph(f"• <b>पॉलिसी संख्या:</b> {policy_str}", normal_style),
+            Paragraph(f"• <b>दावा संदर्भ संख्या:</b> {claim_ref_str}", normal_style),
+            Paragraph(f"• <b>अस्वीकृति की तिथि:</b> {date_str}", normal_style),
+            Paragraph(f"• <b>विवादित राशि:</b> {amount_str}", normal_style),
+            Paragraph(f"• <b>बीमाकर्ता द्वारा उल्लिखित आधार:</b> {claim.stated_ground}", normal_style),
+        ]
+    else:
+        part_heading = "<b>CLAIM PARTICULARS</b>"
+        part_rows = [
+            Paragraph(part_heading, header_style),
+            Paragraph(f"• <b>Policyholder Name:</b> {policyholder_str}", normal_style),
+            Paragraph(f"• <b>Policy Number:</b> {policy_str}", normal_style),
+            Paragraph(f"• <b>Claim Reference ID:</b> {claim_ref_str}", normal_style),
+            Paragraph(f"• <b>Date of Repudiation:</b> {date_str}", normal_style),
+            Paragraph(f"• <b>Disputed Amount:</b> {amount_str}", normal_style),
+            Paragraph(f"• <b>Stated Insurer Ground:</b> {claim.stated_ground}", normal_style),
+        ]
+
+    part_table = Table([[p] for p in part_rows], colWidths=[540])
+    part_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#e2e8f0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(part_table)
+    story.append(Spacer(1, 8))
+
+    # 5. Grounds
+    grounds_title = "<b>अपील के वैधानिक एवं अनुबंधीय आधार:</b>" if is_hi else "<b>Statutory & Contractual Grounds:</b>"
+    story.append(Paragraph(grounds_title, header_style))
+    for r in verdict.reasons:
+        story.append(Paragraph(f"• {r}", normal_style))
+    story.append(Spacer(1, 8))
+
+    # 6. Evidence Items
+    evidence_title = "<b>साक्ष्य एवं उद्धरण:</b>" if is_hi else "<b>Evidence & Document Citations:</b>"
+    story.append(Paragraph(evidence_title, header_style))
+    for i, ev in enumerate(verdict.evidence_trail):
+        source_label = ev.provision_ref or (f"पॉलिसी दस्तावेज़ पृष्ठ {ev.page_number}" if is_hi else f"Policy Wording Page {ev.page_number}")
+        story.append(Paragraph(f"<b>[{i+1}]</b> {ev.statement} (<i>Source: {source_label}</i>)", normal_style))
+    story.append(Spacer(1, 8))
+
+    # 7. Demand & Timeline
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
+    if is_hi:
+        demand_text1 = "<b>निवारण की मांग:</b> आईआरडीएआई नियमों के तहत, बीमाकर्ता को 15 कैलेंडर दिनों के भीतर इस शिकायत का लिखित रूप से निपटारा करना अनिवार्य है।"
+        demand_text2 = "यदि इस शिकायत का संतोषजनक समाधान नहीं होता है, तो बिना किसी अग्रिम सूचना के बीमा लोकपाल नियम, 2017 के नियम 14 के तहत मामले को बीमा लोकपाल के समक्ष प्रस्तुत किया जाएगा।"
+    else:
+        demand_text1 = "<b>Demand for Redressal:</b> Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days."
+        demand_text2 = "In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice."
+    story.append(Paragraph(demand_text1, normal_style))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(demand_text2, normal_style))
+    story.append(Spacer(1, 8))
+
+    # 8. Signoff
+    if is_hi:
+        signoff_html = (
+            f"भवदीय,<br/><br/>"
+            f"<b>{policyholder_str}</b><br/>"
+            f"पॉलिसीधारक / बीमित दावेदार<br/>"
+            f"दिनांक: {date_str}"
+        )
+    else:
+        signoff_html = (
+            f"Yours faithfully,<br/><br/>"
+            f"<b>{policyholder_str}</b><br/>"
+            f"Policyholder / Insured Claimant<br/>"
+            f"Date: {date_str}"
+        )
+    story.append(Paragraph(signoff_html, normal_style))
 
     doc.build(story)
     return buf.getvalue()

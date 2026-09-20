@@ -35,7 +35,8 @@ def generate_all_assets():
             Paragraph("Claims Department, Corporate Office, Chennai", body_style),
             Spacer(1, 15),
             Paragraph("Date: 14/08/2026", body_style),
-            Paragraph("To: Insured Policyholder", body_style),
+            Paragraph("To: Rajesh Kumar", body_style),
+            Paragraph("Policyholder Name: Rajesh Kumar", bold_style),
             Paragraph("Policy Number: P/161114/01/2021/008742", bold_style),
             Paragraph("Claim Reference ID: CIR/2026/161114/098711", bold_style),
             Paragraph("Inception Date: 01/03/2021 | Continuous Months: 65 months", body_style),
@@ -43,7 +44,7 @@ def generate_all_assets():
             Spacer(1, 15),
             Paragraph("<b>SUB: REPUDIATION OF CLAIM UNDER POLICY CLAUSE 4.2</b>", bold_style),
             Spacer(1, 10),
-            Paragraph("Dear Policyholder,<br/><br/>With reference to your hospitalization claim CIR/2026/161114/098711 for cardiac evaluation and treatment, we regret to inform you that the competent authority has repudiated your claim under <b>Clause 4.2</b> of the policy terms.<br/><br/><b>Stated Ground:</b> Repudiation under Clause 4.2: Pre-existing condition (Essential Hypertension & Cardiac history) not disclosed at inception. As per the treating physician notes, the patient has a history of hypertension.<br/><br/>Yours faithfully,<br/>Authorized Claims Signatory<br/>Star Health & Allied Insurance", body_style),
+            Paragraph("Dear Mr. Rajesh Kumar,<br/><br/>With reference to your hospitalization claim CIR/2026/161114/098711 for cardiac evaluation and treatment, we regret to inform you that the competent authority has repudiated your claim under <b>Clause 4.2</b> of the policy terms.<br/><br/><b>Stated Ground:</b> Repudiation under Clause 4.2: Pre-existing condition (Essential Hypertension & Cardiac history) not disclosed at inception. As per the treating physician notes, the patient has a history of hypertension.<br/><br/>Yours faithfully,<br/>Authorized Claims Signatory<br/>Star Health & Allied Insurance", body_style),
         ]
     ]
     create_pdf(assets_dir / "case_1_rejection_letter.pdf", c1_letter)
@@ -79,6 +80,8 @@ def generate_all_assets():
             Paragraph("<b>CARE HEALTH INSURANCE LIMITED</b>", title_style),
             Spacer(1, 15),
             Paragraph("Date: 18/08/2026", body_style),
+            Paragraph("To: Sneha Verma", body_style),
+            Paragraph("Policyholder Name: Sneha Verma", bold_style),
             Paragraph("Policy Number: 18942201-00", bold_style),
             Paragraph("Claim Reference: CARE/2026/CLM/44120", bold_style),
             Paragraph("Policy Inception Date: 06/08/2026", body_style),
@@ -86,7 +89,7 @@ def generate_all_assets():
             Spacer(1, 15),
             Paragraph("<b>RE: REPUDIATION UNDER CLAUSE 4.1 (INITIAL 30 DAYS WAITING PERIOD)</b>", bold_style),
             Spacer(1, 10),
-            Paragraph("Dear Insured,<br/><br/>Your claim for medical treatment of acute appendicitis on 17/08/2026 stands repudiated.<br/><br/><b>Reason:</b> Repudiation under Clause 4.1: Claim reported within the initial 30 days waiting period for non-accidental illness. Policy inception date was 06/08/2026 (only 12 days continuous coverage).<br/><br/>Claims Officer,<br/>Care Health Insurance", body_style),
+            Paragraph("Dear Ms. Sneha Verma,<br/><br/>Your claim for medical treatment of acute appendicitis on 17/08/2026 stands repudiated.<br/><br/><b>Reason:</b> Repudiation under Clause 4.1: Claim reported within the initial 30 days waiting period for non-accidental illness. Policy inception date was 06/08/2026 (only 12 days continuous coverage).<br/><br/>Claims Officer,<br/>Care Health Insurance", body_style),
         ]
     ]
     create_pdf(assets_dir / "case_2_rejection_letter.pdf", c2_letter)
@@ -116,13 +119,15 @@ def generate_all_assets():
             Paragraph("<b>HDFC ERGO GENERAL INSURANCE COMPANY LIMITED</b>", title_style),
             Spacer(1, 15),
             Paragraph("Date: 20/08/2026", body_style),
+            Paragraph("To: Vikram Malhotra", body_style),
+            Paragraph("Policyholder Name: Vikram Malhotra", bold_style),
             Paragraph("Policy Number: 2801 2049 1928 0000", bold_style),
             Paragraph("Claim Reference: HD/REP/2026/8921", bold_style),
             Paragraph("Claimed Amount: Rs. 165,000.00", body_style),
             Spacer(1, 15),
             Paragraph("<b>SUBJECT: CLAIM STATUS NOTIFICATION</b>", bold_style),
             Spacer(1, 10),
-            Paragraph("Dear Customer,<br/><br/>We refer to your claim submitted for reimbursement. Please be advised that after careful examination, the claim is repudiated as per terms and conditions of policy.<br/><br/>HDFC ERGO Claims Service", body_style),
+            Paragraph("Dear Mr. Vikram Malhotra,<br/><br/>We refer to your claim submitted for reimbursement. Please be advised that after careful examination, the claim is repudiated as per terms and conditions of policy.<br/><br/>HDFC ERGO Claims Service", body_style),
         ]
     ]
     create_pdf(assets_dir / "case_3_rejection_letter.pdf", c3_letter)

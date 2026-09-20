@@ -33,6 +33,16 @@ export const ConfirmPage: React.FC<ConfirmPageProps> = ({
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Policyholder Name */}
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Policyholder Name
+            </span>
+            <div className="text-sm font-bold text-slate-900 mt-1">
+              {claimRecord.policyholder_name || <span className="text-slate-400 italic">Insured Claimant</span>}
+            </div>
+          </div>
+
           {/* Insurer Name */}
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">

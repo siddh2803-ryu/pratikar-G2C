@@ -13,6 +13,7 @@ export interface StructuredClaimRecord {
   cited_clause_ref: string | null;
   policy_inception_date: string | null;
   continuous_months: number | null;
+  policyholder_name?: string | null;
 }
 
 export interface EvidenceItem {

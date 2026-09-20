@@ -93,18 +93,21 @@ export const AppealPage: React.FC<AppealPageProps> = ({
 
         {/* Particulars */}
         <div className="space-y-1 font-sans text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-          <div className="font-bold uppercase tracking-wider text-slate-500 mb-2">Claim Particulars</div>
-          <p>• <b>Policy Number:</b> {claimRecord.policy_number || 'Refer enclosed policy'}</p>
-          <p>• <b>Claim Reference ID:</b> {claimRecord.claim_reference || 'N/A'}</p>
-          <p>• <b>Date of Repudiation:</b> {claimRecord.rejection_date}</p>
-          <p>• <b>Disputed Amount:</b> {claimRecord.claim_amount ? `₹${claimRecord.claim_amount.toLocaleString('en-IN')}` : 'As per hospital bills'}</p>
-          <p>• <b>Stated Insurer Ground:</b> {claimRecord.stated_ground}</p>
+          <div className="font-bold uppercase tracking-wider text-slate-500 mb-2">
+            {language === 'hi' ? 'दावे का विवरण (Claim Particulars)' : 'Claim Particulars'}
+          </div>
+          <p>• <b>{language === 'hi' ? 'पॉलिसीधारक का नाम:' : 'Policyholder Name:'}</b> {claimRecord.policyholder_name || (language === 'hi' ? 'बीमित दावेदार' : 'Insured Claimant')}</p>
+          <p>• <b>{language === 'hi' ? 'पॉलिसी संख्या:' : 'Policy Number:'}</b> {claimRecord.policy_number || (language === 'hi' ? 'संलग्न पॉलिसी देखें' : 'Refer enclosed policy')}</p>
+          <p>• <b>{language === 'hi' ? 'दावा संदर्भ संख्या:' : 'Claim Reference ID:'}</b> {claimRecord.claim_reference || (language === 'hi' ? 'लागू नहीं' : 'N/A')}</p>
+          <p>• <b>{language === 'hi' ? 'अस्वीकृति की तिथि:' : 'Date of Repudiation:'}</b> {claimRecord.rejection_date}</p>
+          <p>• <b>{language === 'hi' ? 'विवादित राशि:' : 'Disputed Amount:'}</b> {claimRecord.claim_amount ? `₹${claimRecord.claim_amount.toLocaleString('en-IN')}` : (language === 'hi' ? 'अस्पताल बिल के अनुसार' : 'As per hospital bills')}</p>
+          <p>• <b>{language === 'hi' ? 'बीमाकर्ता द्वारा उल्लिखित आधार:' : 'Stated Insurer Ground:'}</b> {claimRecord.stated_ground}</p>
         </div>
 
         {/* Grounds */}
         <div className="space-y-2">
           <div className="font-bold text-slate-900 font-sans text-xs uppercase tracking-wider">
-            {language === 'hi' ? 'अपील के वैधानिक एवं अनुबंधीय आधार' : 'Statutory & Contractual Grounds:'}
+            {language === 'hi' ? 'अपील के वैधानिक एवं अनुबंधीय आधार:' : 'Statutory & Contractual Grounds:'}
           </div>
           <ul className="space-y-1.5 pl-4 list-disc">
             {verdict.reasons.map((r, i) => (
@@ -116,7 +119,7 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         {/* Evidence items */}
         <div className="space-y-2">
           <div className="font-bold text-slate-900 font-sans text-xs uppercase tracking-wider">
-            {language === 'hi' ? 'साक्ष्य एवं उद्धरण' : 'Evidence & Document Citations:'}
+            {language === 'hi' ? 'साक्ष्य एवं उद्धरण:' : 'Evidence & Document Citations:'}
           </div>
           <div className="space-y-1.5 text-xs text-slate-700">
             {verdict.evidence_trail.map((ev, i) => (
@@ -130,18 +133,32 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         {/* Demand & Timeline */}
         <div className="space-y-2 text-xs text-slate-700 pt-2 border-t border-slate-200">
           <p>
-            <b>Demand for Redressal:</b> Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.
+            <b>{language === 'hi' ? 'निवारण की मांग:' : 'Demand for Redressal:'}</b>{' '}
+            {language === 'hi'
+              ? 'आईआरडीएआई नियमों के तहत, बीमाकर्ता को 15 कैलेंडर दिनों के भीतर इस शिकायत का लिखित रूप से निपटारा करना अनिवार्य है।'
+              : 'Under IRDAI regulations, the insurer must dispose of this grievance in writing within 15 calendar days.'}
           </p>
           <p>
-            In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.
+            {language === 'hi'
+              ? 'यदि इस शिकायत का संतोषजनक समाधान नहीं होता है, तो बिना किसी अग्रिम सूचना के बीमा लोकपाल नियम, 2017 के नियम 14 के तहत मामले को बीमा लोकपाल के समक्ष प्रस्तुत किया जाएगा।'
+              : 'In the event this grievance is not resolved to satisfaction, this matter will be escalated to the Insurance Ombudsman under Rule 14 of the Insurance Ombudsman Rules, 2017 without further notice.'}
           </p>
         </div>
 
         {/* Signoff */}
         <div className="pt-4 font-sans text-xs">
-          <p>Yours faithfully,</p>
-          <p className="font-bold text-slate-900 mt-4">Policyholder / Insured Claimant</p>
-          <p className="text-slate-500">Date: {claimRecord.rejection_date}</p>
+          <p>{language === 'hi' ? 'भवदीय,' : 'Yours faithfully,'}</p>
+          <p className="font-bold text-slate-900 mt-4">
+            {claimRecord.policyholder_name || (language === 'hi' ? 'पॉलिसीधारक / बीमित दावेदार' : 'Policyholder / Insured Claimant')}
+          </p>
+          {claimRecord.policyholder_name && (
+            <p className="text-slate-600 text-xs">
+              {language === 'hi' ? 'पॉलिसीधारक / बीमित दावेदार' : 'Policyholder / Insured Claimant'}
+            </p>
+          )}
+          <p className="text-slate-500">
+            {language === 'hi' ? 'दिनांक:' : 'Date:'} {claimRecord.rejection_date}
+          </p>
         </div>
       </div>
 

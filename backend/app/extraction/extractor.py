@@ -180,6 +180,31 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
         days = (rejection_date - policy_inception_date).days
         continuous_months = max(0, days // 30)
 
+    # Policyholder / Insured name extraction
+    policyholder_name = None
+    name_patterns = [
+        r"(?:Policyholder\s*Name|Name\s*of\s*(?:the\s*)?Policyholder)[\s:]*([A-Za-z\.\s]+)",
+        r"(?:Insured\s*Name|Name\s*of\s*(?:the\s*)?Insured)[\s:]*([A-Za-z\.\s]+)",
+        r"(?:Patient\s*Name|Name\s*of\s*(?:the\s*)?Patient)[\s:]*([A-Za-z\.\s]+)",
+        r"(?:^|\n)\s*To\s*:\s*(?:Mr\.|Ms\.|Mrs\.|Dr\.)?\s*([A-Za-z\.\s]+)",
+        r"(?:^|\n)\s*Dear\s+(?:Mr\.|Ms\.|Mrs\.|Dr\.)?\s*([A-Za-z\.\s]+?)(?:,|\n)",
+    ]
+    disallowed_names = {
+        "policyholder", "insured", "insured policyholder", "the insured", "customer",
+        "claimant", "sir", "madam", "sir/madam", "whomsoever it may concern",
+        "claims department", "corporate office", "authorized signatory", "unknown"
+    }
+    for pat in name_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            candidate = m.group(1).split("\n")[0].split("|")[0].split(",")[0].strip()
+            candidate = re.sub(r"\s+", " ", candidate)
+            candidate = re.sub(r"^(?:Mr\.|Ms\.|Mrs\.|Dr\.|Shri|Smt\.)\s*", "", candidate, flags=re.IGNORECASE).strip()
+            if candidate and len(candidate) > 2 and candidate.lower() not in disallowed_names:
+                if not any(char.isdigit() for char in candidate) and len(candidate.split()) <= 4:
+                    policyholder_name = candidate
+                    break
+
     return StructuredClaimRecord(
         insurer_name=insurer_name,
         policy_number=policy_number,
@@ -190,6 +215,7 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
         cited_clause_ref=cited_clause_ref,
         policy_inception_date=policy_inception_date,
         continuous_months=continuous_months,
+        policyholder_name=policyholder_name,
     )
 
 

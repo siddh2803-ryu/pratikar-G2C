@@ -26,6 +26,7 @@ DEMO_CASE_1 = {
         "cited_clause_ref": "Clause 4.2",
         "policy_inception_date": "2021-03-01",
         "continuous_months": 65,
+        "policyholder_name": "Rajesh Kumar",
     },
     "verdict": {
         "level": "strong",
@@ -75,6 +76,7 @@ DEMO_CASE_2 = {
         "cited_clause_ref": "Clause 4.1",
         "policy_inception_date": "2026-08-06",
         "continuous_months": 0,
+        "policyholder_name": "Sneha Verma",
     },
     "verdict": {
         "level": "weak",
@@ -123,6 +125,7 @@ DEMO_CASE_3 = {
         "cited_clause_ref": None, # ABSENT! Drives Flow C
         "policy_inception_date": "2023-01-15",
         "continuous_months": 43,
+        "policyholder_name": "Vikram Malhotra",
     },
     "verdict": {
         "level": "moderate",

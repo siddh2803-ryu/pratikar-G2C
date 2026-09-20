@@ -20,6 +20,7 @@ class StructuredClaimRecord(BaseModel):
     cited_clause_ref: Optional[str] = Field(None, description="Clause cited by insurer. Absence drives Flow C.")
     policy_inception_date: Optional[date] = Field(None, description="Policy start date, required for moratorium check")
     continuous_months: Optional[int] = Field(None, description="Continuous months of active coverage")
+    policyholder_name: Optional[str] = Field(None, description="Name of the policyholder or insured claimant")
 
 
 class RuleResult(BaseModel):
