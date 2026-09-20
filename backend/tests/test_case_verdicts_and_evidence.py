@@ -555,3 +555,81 @@ def test_clause_mismatch_not_fooled_by_percentages_or_tables():
     assert all(ev["source_type"] != "policy_span" for ev in trail)
     assert any("Policy Document Audit" in ev["provision_ref"] for ev in trail)
 
+
+def test_total_amount_extraction_and_page_1_toc_avoidance():
+    """Verifies that:
+    1. 'Total Amount: INR 3,50,000.00' is correctly extracted into claim_amount (not 'as per bills').
+    2. Policyholder name is correctly extracted without trailing label leaks.
+    3. Rejection under Clause 4.2 with 65 months continuous tenure selects operative Page 2,
+       NOT Page 1 which contains a Table of Contents summary.
+    4. Verdict is Strong (Moratorium Violation).
+    """
+    import io
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak
+
+    styles = getSampleStyleSheet()
+
+    # Rejection Letter with Total Amount and Policyholder Name
+    let_buf = io.BytesIO()
+    let_doc = SimpleDocTemplate(let_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    let_story = [
+        Paragraph("STAR HEALTH AND ALLIED INSURANCE CO.", styles["Heading1"]),
+        Paragraph("Date: 14/08/2026", styles["Normal"]),
+        Paragraph("To: Ramesh Patel", styles["Normal"]),
+        Paragraph("Policyholder Name: Ramesh Patel", styles["Normal"]),
+        Paragraph("Policy Number: P/161114/01/2021/009988", styles["Normal"]),
+        Paragraph("Claim Reference: CIR/2026/8877", styles["Normal"]),
+        Paragraph("Total Amount: INR 3,50,000.00", styles["Normal"]),
+        Paragraph("Inception Date: 01/03/2021", styles["Normal"]),
+        Paragraph("Continuous Months: 65 months", styles["Normal"]),
+        Paragraph("SUB: REPUDIATION OF CLAIM UNDER POLICY CLAUSE 4.2", styles["Heading2"]),
+        Paragraph("Your claim for cardiac care has been repudiated under Clause 4.2 for pre-existing disease.", styles["Normal"]),
+    ]
+    let_doc.build(let_story)
+    let_bytes = let_buf.getvalue()
+
+    # Policy with Page 1 Table of Contents and Page 2 Operative Exclusion
+    pol_buf = io.BytesIO()
+    pol_doc = SimpleDocTemplate(pol_buf, pagesize=(612, 792), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    pol_story = [
+        Paragraph("STAR HEALTH INSURANCE POLICY", styles["Heading1"]),
+        Paragraph("TABLE OF CONTENTS", styles["Heading2"]),
+        Paragraph("Clause 4.2 Pre-Existing Diseases ................... Page 2", styles["Normal"]),
+        Paragraph("Clause 4.3 Specific Waiting Periods ................. Page 3", styles["Normal"]),
+        PageBreak(),
+        Paragraph("SECTION 4: STANDARD EXCLUSIONS", styles["Heading1"]),
+        Paragraph("Clause 4.2 Pre-Existing Diseases (Code-Excl01): Expenses related to the treatment of a Pre-Existing Disease (PED) and its direct complications shall be excluded until the expiry of the waiting period specified in the policy schedule.", styles["Normal"]),
+    ]
+    pol_doc.build(pol_story)
+    pol_bytes = pol_buf.getvalue()
+
+    res = client.post("/api/analyses", files={
+        "rejection_letter": ("let.pdf", let_bytes, "application/pdf"),
+        "policy_wording": ("pol.pdf", pol_bytes, "application/pdf"),
+    })
+    assert res.status_code == 201
+    analysis_id = res.json()["analysis_id"]
+    data = client.get(f"/api/analyses/{analysis_id}").json()
+
+    # Verify extracted fields
+    record = data["claim_record"]
+    assert record["policyholder_name"] == "Ramesh Patel"
+    assert record["claim_amount"] == 350000.0
+    assert record["continuous_months"] == 65
+    assert record["cited_clause_ref"] == "Clause 4.2"
+
+    # Verify Strong verdict
+    verdict = data["verdict"]
+    assert verdict["level"] == "strong"
+    assert verdict["flow"] == "flow_a"
+    assert "IRDAI regulations" in verdict["summary"]
+
+    # Verify Evidence Trail points to Page 2 (NOT Page 1 TOC)
+    trail = verdict["evidence_trail"]
+    policy_spans = [ev for ev in trail if ev["source_type"] == "policy_span"]
+    assert len(policy_spans) == 1
+    assert policy_spans[0]["page_number"] == 2
+    assert "Code-Excl01" in policy_spans[0]["source_text"]
+
+

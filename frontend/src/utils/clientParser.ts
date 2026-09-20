@@ -24,7 +24,25 @@ export async function extractPagesFromPdf(file: File): Promise<PdfPageChunk[]> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const pageText = content.items.map((item: any) => item.str).join(' ');
+    
+    let pageText = '';
+    let lastY: number | null = null;
+    for (const item of content.items as any[]) {
+      const str = (item.str || '').trim();
+      if (!str && !item.hasEOL) continue;
+      const currentY = item.transform ? item.transform[5] : null;
+      if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 5) {
+        pageText += '\n';
+      } else if (item.hasEOL) {
+        pageText += '\n';
+      } else if (pageText.length > 0 && !pageText.endsWith('\n') && !pageText.endsWith(' ')) {
+        pageText += ' ';
+      }
+      pageText += (item.str || '');
+      if (currentY !== null) {
+        lastY = currentY;
+      }
+    }
     chunks.push({ pageNumber: i, text: pageText });
   }
 
@@ -42,31 +60,48 @@ const FORBIDDEN_NAMES = new Set([
   'care health', 'star health', 'hdfc ergo', 'niva bupa', 'max bupa',
   'icici lombard', 'bajaj allianz', 'united india', 'national insurance',
   'authorized signatory', 'claims department', 'claims officer',
+  'unknown', 'insured', 'proposer', 'patient', 'health insurance',
+  'company', 'corporate office', 'signatory', 'competent authority',
+  'claims service', 'general insurance'
 ]);
 
 /**
- * Extracts policyholder name using the exact heuristics as the backend.
+ * Extracts policyholder name using multi-format regex patterns with strict boundary handling.
  */
 export function extractPolicyholderName(text: string): string | null {
   const patterns = [
-    /(?:Policyholder Name|Insured Name|Patient Name|Name of Insured|Claimant Name)\s*[:\-]\s*([A-Z][a-zA-Z\s\.]{2,40})/i,
-    /To\s*,\s*\n?\s*(?:Mr\.|Ms\.|Mrs\.|Shri|Smt\.)?\s*([A-Z][a-zA-Z\s\.]{2,40})/i,
-    /Dear\s+(?:Mr\.|Ms\.|Mrs\.|Shri|Smt\.)?\s*([A-Z][a-zA-Z\s\.]{2,35})/i,
-    /Patient\s*:\s*([A-Z][a-zA-Z\s\.]{2,35})/i,
-    /(?:^|\n)\s*(?:Policy\s*holder|Insured(?:\s*Person)?|Proposer|Claimant)[\s:\-\|]+([A-Za-z\.\'\-\s]{2,40})/i,
+    /(?:Policy\s*holder(?:'s)?\s*Name|Name\s*of\s*(?:the\s*)?Policy\s*holder)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:Insured\s*(?:Person(?:'s)?)?\s*Name|Name\s*of\s*(?:the\s*)?Insured(?:\s*Person)?)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:Patient(?:'s)?\s*Name|Name\s*of\s*(?:the\s*)?Patient)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:Claimant(?:'s)?\s*Name|Name\s*of\s*(?:the\s*)?Claimant)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:Customer\s*Name|Member\s*Name|Proposer(?:'s)?\s*Name)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:^|\n)\s*(?:Policy\s*holder|Insured(?:\s*Person)?|Proposer|Claimant|Patient)[\s:\-\|]+([A-Za-z\.\'\-\s]+)/i,
+    /(?:^|\n)\s*To\s*[:,-]?\s*(?:Mr\.|Ms\.|Mrs\.|Shri|Smt\.|Dr\.)?\s*([A-Za-z\.\'\-\s]+)/i,
+    /(?:^|\n)\s*Dear\s+(?:Mr\.|Ms\.|Mrs\.|Shri|Smt\.|Dr\.)?\s*([A-Za-z\.\'\-\s]+?)(?:,|\n|$)/i,
   ];
 
+  const prefixRegex = /^(?:Mr\.|Ms\.|Mrs\.|Dr\.|Prof\.|Shri|Smt\.|Master|Kumari)\s*/i;
+
   for (const pat of patterns) {
-    const match = text.match(pat);
-    if (match && match[1]) {
-      const candidate = match[1].trim().split(/\r?\n/)[0].trim().replace(/[,|].*$/, '').trim();
-      const lower = candidate.toLowerCase();
+    const matches = Array.from(text.matchAll(new RegExp(pat.source, 'gi')));
+    for (const match of matches) {
+      if (!match || !match[1]) continue;
+      let cand = match[1].split('\n')[0].split('|')[0].split(',')[0].trim();
+      cand = cand.replace(/\s+(?:Policy|Claim|Ref|Date|Age|Gender|DOB|Inception|Continuous)\b.*$/i, '').trim();
+      cand = cand.replace(prefixRegex, '').trim();
+      cand = cand.replace(/[:;,\.\-_]+$/, '').trim();
+
+      const lower = cand.toLowerCase();
       if (
-        candidate.length >= 3 &&
-        !Array.from(FORBIDDEN_NAMES).some((f) => lower.includes(f)) &&
-        !/\d/.test(candidate)
+        cand.length >= 3 &&
+        cand.length <= 40 &&
+        !Array.from(FORBIDDEN_NAMES).some((f) => lower === f || lower.startsWith(f + ' ') || lower.endsWith(' ' + f)) &&
+        !/\d/.test(cand)
       ) {
-        return candidate;
+        const words = cand.split(/\s+/);
+        if (words.length >= 1 && words.length <= 5) {
+          return cand;
+        }
       }
     }
   }
@@ -75,18 +110,59 @@ export function extractPolicyholderName(text: string): string | null {
 
 function parseFlexibleDate(dateStr: string): string | null {
   if (!dateStr) return null;
-  const datePat = dateStr.match(/\b(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})\b/);
-  const target = datePat ? datePat[1] : dateStr;
-  const clean = target.replace(/(?:st|nd|rd|th)/gi, '').replace(/\s+/g, ' ').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
-  const dmy = clean.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
-  if (dmy) {
-    const day = dmy[1].padStart(2, '0');
-    const month = dmy[2].padStart(2, '0');
-    let year = dmy[3];
+  const MONTHS: Record<string, string> = {
+    jan: '01', january: '01', feb: '02', february: '02',
+    mar: '03', march: '03', apr: '04', april: '04',
+    may: '05', jun: '06', june: '06', jul: '07', july: '07',
+    aug: '08', august: '08', sep: '09', september: '09',
+    oct: '10', october: '10', nov: '11', november: '11',
+    dec: '12', december: '12'
+  };
+
+  const clean = dateStr
+    .replace(/(?:st|nd|rd|th)/gi, '')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // YYYY-MM-DD
+  const isoMatch = clean.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = clean.match(/\b(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})\b/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    let year = dmyMatch[3];
     if (year.length === 2) year = `20${year}`;
     return `${year}-${month}-${day}`;
   }
+
+  // DD Month YYYY (e.g. 01 March 2021 or 1 Mar 2021)
+  const textMatch1 = clean.match(/\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{2,4})\b/);
+  if (textMatch1) {
+    const day = textMatch1[1].padStart(2, '0');
+    const mStr = textMatch1[2].toLowerCase();
+    const month = MONTHS[mStr];
+    let year = textMatch1[3];
+    if (year.length === 2) year = `20${year}`;
+    if (month) return `${year}-${month}-${day}`;
+  }
+
+  // Month DD YYYY (e.g. March 1 2021)
+  const textMatch2 = clean.match(/\b([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{2,4})\b/);
+  if (textMatch2) {
+    const mStr = textMatch2[1].toLowerCase();
+    const month = MONTHS[mStr];
+    const day = textMatch2[2].padStart(2, '0');
+    let year = textMatch2[3];
+    if (year.length === 2) year = `20${year}`;
+    if (month) return `${year}-${month}-${day}`;
+  }
+
   return null;
 }
 
@@ -162,8 +238,9 @@ interface PolicySpanMatch {
  * Searches policy page chunks for operative clause provision, filtering out TOC / indexes.
  */
 function retrieveOperativeClause(chunks: PdfPageChunk[], clauseRef: string): PolicySpanMatch | null {
-  const numMatch = clauseRef.match(/(\d+(?:\.\d+)*)/);
-  const clauseNum = numMatch ? numMatch[1] : clauseRef;
+  const numMatch = clauseRef.match(/(\d+(?:\.\d+)*[A-Za-z0-9\(\)\-_]*)/);
+  const codeMatch = clauseRef.match(/(Code[\-_]Excl\d+)/i);
+  const clauseNum = codeMatch ? codeMatch[1] : (numMatch ? numMatch[1] : clauseRef);
 
   const candidateMatches: { pageNumber: number; quotedText: string; score: number }[] = [];
 
@@ -171,32 +248,66 @@ function retrieveOperativeClause(chunks: PdfPageChunk[], clauseRef: string): Pol
     const text = chunk.text;
     const lower = text.toLowerCase();
 
-    // Check TOC / Index penalties
-    const isToc = lower.slice(0, 400).includes('table of contents') ||
-      lower.slice(0, 400).includes('contents') ||
-      (text.match(/\.{3,}\s*(?:page\s*)?\d+/gi) || []).length >= 2;
+    // Stricter TOC and Index detection
+    const isToc = (
+      lower.includes('table of contents') ||
+      lower.slice(0, 600).includes('contents') ||
+      lower.slice(0, 600).includes('clause index') ||
+      (chunk.pageNumber <= 3 && (text.match(/\.{3,}\s*(?:page\s*)?\d+/gi) || []).length >= 2) ||
+      (chunk.pageNumber <= 3 && (text.match(/(?:clause|section)\s+\d+[^\n]{3,60}\b\d+\s*$/gim) || []).length >= 2)
+    );
 
     const patterns = [
       new RegExp(`\\bClause\\s+${clauseNum}\\b`, 'i'),
       new RegExp(`\\bSection\\s+${clauseNum}\\b`, 'i'),
       new RegExp(`\\bExclusion\\s+${clauseNum}\\b`, 'i'),
+      new RegExp(`\\bCondition\\s+${clauseNum}\\b`, 'i'),
       new RegExp(`(?:^|\\n)\\s*${clauseNum}[\\s\\.\\-:]+[A-Z]`, 'i'),
-      new RegExp(`\\b${clauseRef}\\b`, 'i'),
     ];
+
+    if (codeMatch) {
+      patterns.unshift(new RegExp(`\\b${codeMatch[1]}\\b`, 'i'));
+    }
 
     for (const pat of patterns) {
       const match = text.match(pat);
       if (match && match.index !== undefined) {
+        // Disallow bare percentages like 5.9%
+        const matchedStr = text.slice(match.index, match.index + 30);
+        if (/^\d+\.\d+%\s*/.test(matchedStr) || /%\s*$/.test(matchedStr)) continue;
+
         const start = Math.max(0, match.index - 20);
-        const end = Math.min(text.length, match.index + 500);
+        const end = Math.min(text.length, match.index + 600);
         const snippet = text.slice(start, end).replace(/\s+/g, ' ').trim();
 
         let score = 0;
-        if (isToc) score -= 200;
-        if (new RegExp(`(?:clause|section|exclusion)\\s*${clauseNum}`, 'i').test(snippet)) score += 80;
-        const operativeWords = ['shall not be liable', 'shall be excluded', 'expenses related to', 'waiting period', 'continuous coverage', 'is not covered'];
+        if (isToc) score -= 300;
+        // Cover / front page penalty if multiple pages exist
+        if (chunk.pageNumber === 1 && chunks.length > 1) score -= 100;
+
+        // Reward operative heading format
+        if (new RegExp(`(?:^|\\n)\\s*(?:clause|section|exclusion|condition)?\\s*${clauseNum}[\\s\\.\\-:]+`, 'i').test(snippet)) {
+          score += 90;
+        }
+
+        const operativeWords = [
+          'shall not be liable', 'shall be excluded', 'expenses related to',
+          'waiting period', 'continuous coverage', 'is not covered', 'code-excl',
+          'the company will not pay', 'permanent exclusion', 'standard exclusions',
+          'treatment of a pre-existing disease', 'specific waiting period'
+        ];
         const matchedKw = operativeWords.filter((w) => snippet.toLowerCase().includes(w)).length;
         score += matchedKw * 35;
+
+        // Reward substantial operative paragraph body
+        if (snippet.length >= 150 && matchedKw >= 1) {
+          score += 40;
+        }
+
+        // Heavy penalty if snippet is just a TOC line or short line with page number
+        if (snippet.length < 100 && (/\bpage\s*\d+\b/i.test(snippet) || /\.{3,}/.test(snippet))) {
+          score -= 150;
+        }
 
         candidateMatches.push({
           pageNumber: chunk.pageNumber,
@@ -211,7 +322,7 @@ function retrieveOperativeClause(chunks: PdfPageChunk[], clauseRef: string): Pol
   if (candidateMatches.length === 0) return null;
   candidateMatches.sort((a, b) => b.score - a.score);
   const best = candidateMatches[0];
-  if (best.score < 30) return null;
+  if (best.score < 40) return null;
 
   return {
     pageNumber: best.pageNumber,
@@ -266,28 +377,43 @@ export async function parseClaimClientSide(
 
   // 5. Claim Amount
   let claimAmount: number | null = null;
-  const amtMatch = letterText.match(/(?:Disputed Amount|Claim Amount|Amount Claimed|Bill Amount|INR|Rs\.?)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+  const amtMatch = letterText.match(
+    /(?:Total\s*(?:Claim\s*|Bill\s*|Disputed\s*)?Amount|Claimed\s*Amount|Claim\s*Amount|Disputed\s*Amount|Amount\s*(?:Claimed|Disputed)|Bill\s*Amount|Hospital\s*Bill\s*Amount|Amount\s*of\s*Claim)\s*[:\-]?\s*(?:INR|Rs\.?|₹)?\s*([0-9,]+(?:\.[0-9]{2})?)/i
+  ) || letterText.match(
+    /(?:INR|Rs\.?|₹)\s*([0-9,]+(?:\.[0-9]{2})?)/i
+  );
   if (amtMatch) {
     const parsed = parseFloat(amtMatch[1].replace(/,/g, ''));
-    if (!isNaN(parsed)) claimAmount = parsed;
+    if (!isNaN(parsed) && parsed > 0) claimAmount = parsed;
   }
 
   // 6. Policy Inception Date
   let policyInceptionDate: string | null = null;
-  const incMatch = letterText.match(/(?:Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since)[^\n\d]*(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})/i) ||
-    policyText.match(/(?:Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since)[^\n\d]*(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+  const incMatch = letterText.match(/(?:Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since)[^\n\d]*([^\n]{8,35})/i);
   if (incMatch) {
     policyInceptionDate = parseFlexibleDate(incMatch[1].trim());
+  }
+  if (!policyInceptionDate && policyChunks.length > 0) {
+    for (const chunk of policyChunks.slice(0, 5)) {
+      const pMatch = chunk.text.match(/(?:Policy\s*Inception\s*Date|Inception\s*Date|Policy\s*Start\s*Date|Policy\s*Commencement\s*Date|Period\s*of\s*Insurance\s*From|Member\s*Since|Continuous\s*Since)[^\n\d]*([^\n]{8,35})/i);
+      if (pMatch) {
+        const parsed = parseFlexibleDate(pMatch[1].trim());
+        if (parsed) {
+          policyInceptionDate = parsed;
+          break;
+        }
+      }
+    }
   }
 
   // 7. Rejection Date
   let rejectionDate: string = new Date().toISOString().slice(0, 10);
-  const rejMatch = letterText.match(/(?:Date\s*of\s*(?:Repudiation|Letter|Rejection|Decision)|Letter\s*Date|Dated)[^\n\d]*(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+  const rejMatch = letterText.match(/(?:Date\s*of\s*(?:Repudiation|Letter|Rejection|Decision)|Letter\s*Date|Dated)[^\n\d]*([^\n]{8,35})/i);
   if (rejMatch) {
     const parsed = parseFlexibleDate(rejMatch[1]);
     if (parsed) rejectionDate = parsed;
   } else {
-    const standalone = letterText.match(/(?:^|\n)\s*Date\s*(?!of\s*(?:Birth|Admission|Loss|Inception))[^\n\d]*(\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+    const standalone = letterText.match(/(?:^|\n)\s*Date\s*(?!of\s*(?:Birth|Admission|Loss|Inception))[^\n\d]*([^\n]{8,35})/i);
     if (standalone) {
       const parsed = parseFlexibleDate(standalone[1]);
       if (parsed) rejectionDate = parsed;
@@ -429,32 +555,49 @@ export async function parseClaimClientSide(
   }
 
   // SCENARIO 1: Moratorium Violation (Flow A Strong)
-  if (continuousMonths !== null && continuousMonths >= 60) {
+  const isMoratoriumCondition = (
+    (continuousMonths !== null && continuousMonths >= 60) ||
+    (activeDays !== null && activeDays >= 1800) ||
+    (policyInceptionDate && rejectionDate && diffMonths(policyInceptionDate, rejectionDate) >= 60)
+  );
+
+  if (isMoratoriumCondition) {
+    const tenureMonths = continuousMonths !== null && continuousMonths >= 60
+      ? continuousMonths
+      : (activeDays !== null ? Math.floor(activeDays / 30) : 60);
+
     const verdict: Verdict = {
       level: 'strong',
       summary: "The insurer's repudiation violates binding IRDAI regulations. After 60 continuous months of coverage, claims cannot be contested for pre-existing disease or non-disclosure.",
       reasons: [
-        `The insurer rejected the claim citing pre-existing condition or non-disclosure (${citedClause}), but the policy has completed ${continuousMonths} months of continuous coverage. Under IRDAI Master Circular 2024 cl. 13, the moratorium period of 60 months has elapsed, making the policy and claim incontestable on these grounds.`,
+        `The insurer rejected the claim citing pre-existing condition or non-disclosure (${citedClause}), but the policy has completed ${tenureMonths} months of continuous coverage. Under IRDAI Master Circular 2024 cl. 13, the moratorium period of 60 months has elapsed, making the policy and claim incontestable on these grounds.`,
         `Policy Clause ${citedClause} operates subject to statutory IRDAI moratorium limits which override restrictive policy wording.`,
         'An official Grievance Redressal Officer (GRO) appeal has been prepared demanding immediate withdrawal of the repudiation and full settlement.'
       ],
       evidence_trail: [
         {
           id: 'ev_client_1',
-          statement: `The policy has completed ${continuousMonths} continuous months of coverage, exceeding the 60-month statutory moratorium.`,
+          statement: `The policy has completed ${tenureMonths} continuous months of coverage, exceeding the 60-month statutory moratorium.`,
           source_type: 'provision',
           provision_ref: 'IRDAI Master Circular 2024 cl. 13 / Moratorium Clause',
           source_text: '[IRDAI Master Circular 2024 cl. 13]: After sixty continuous months of health insurance coverage, no policy and no claim can be contested on grounds of non-disclosure, misrepresentation, or pre-existing disease, save for established fraud.',
           ordinal: 1,
         },
-        {
+        ...(policySpan ? [{
           id: 'ev_client_2',
-          statement: `Policy Clause ${citedClause} retrieved verbatim from Page ${policySpan!.pageNumber} of policy wording.`,
-          source_type: 'policy_span',
-          page_number: policySpan!.pageNumber,
-          source_text: `Clause ${citedClause}: "${policySpan!.quotedText}"`,
+          statement: `Policy Clause ${citedClause} retrieved verbatim from Page ${policySpan.pageNumber} of policy wording.`,
+          source_type: 'policy_span' as const,
+          page_number: policySpan.pageNumber,
+          source_text: `Clause ${citedClause}: "${policySpan.quotedText}"`,
           ordinal: 2,
-        }
+        }] : [{
+          id: 'ev_client_2',
+          statement: 'Statutory 60-month moratorium overrides any policy exclusion terms under binding IRDAI regulations.',
+          source_type: 'provision' as const,
+          provision_ref: 'IRDAI Master Circular 2024 cl. 13 / Binding Incontestability',
+          source_text: '[IRDAI Master Circular 2024 cl. 13]: Policy terms operate subject to statutory IRDAI moratorium limits which override restrictive policy wording.',
+          ordinal: 2,
+        }])
       ],
       generated_at: new Date().toISOString(),
       statutory_deadline: '15 Calendar Days (IRDAI Master Circular 2024 cl. 6)',

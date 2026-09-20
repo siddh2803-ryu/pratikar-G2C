@@ -419,6 +419,30 @@ def extract_rejection_reason_from_text(text: str) -> Tuple[str, bool]:
     return ("Claim repudiated as per terms and conditions of the policy.", False)
 
 
+def extract_claim_amount_from_text(text: str) -> Optional[float]:
+    """Extracts claim amount / disputed amount / bill amount from rejection letter text.
+    Handles 'Total Amount', 'Total Claim Amount', 'Claimed Amount', 'Disputed Amount',
+    currency symbols (INR, Rs., ₹), decimals, and Indian number comma separators.
+    """
+    amount_match = re.search(
+        r"(?:Total\s*(?:Claim\s*|Bill\s*|Disputed\s*)?Amount|Claimed\s*Amount|Claim\s*Amount|Disputed\s*Amount|Amount\s*(?:Claimed|Disputed)|Bill\s*Amount|Hospital\s*Bill\s*Amount|Amount\s*of\s*Claim)\s*[:\-]?\s*(?:INR|Rs\.?|₹)?\s*([0-9,]+(?:\.[0-9]{2})?)",
+        text,
+        re.IGNORECASE,
+    )
+    if not amount_match:
+        amount_match = re.search(r"(?:INR|Rs\.?|₹)\s*([0-9,]+(?:\.[0-9]{2})?)", text, re.IGNORECASE)
+
+    if amount_match:
+        try:
+            val_str = amount_match.group(1).replace(",", "").rstrip(".")
+            parsed = float(val_str)
+            if parsed > 0:
+                return parsed
+        except (ValueError, IndexError):
+            pass
+    return None
+
+
 def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
     """High-accuracy fallback parser for offline/local extraction and testing.
     Pulls structured fields from standard insurer rejection letter formats.
@@ -474,13 +498,7 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
             claim_reference = cir_match.group(1).strip()
 
     # Claim amount
-    amount_match = re.search(r"(?:Claimed\s*Amount|Claim\s*Amount|Amount\s*disputed|Rs\.?|INR)[\s:]*([0-9,]+(?:\.[0-9]{2})?)", text, re.IGNORECASE)
-    claim_amount = None
-    if amount_match:
-        try:
-            claim_amount = float(amount_match.group(1).replace(",", ""))
-        except ValueError:
-            claim_amount = None
+    claim_amount = extract_claim_amount_from_text(text)
 
     # Policy inception date
     policy_inception_date = None

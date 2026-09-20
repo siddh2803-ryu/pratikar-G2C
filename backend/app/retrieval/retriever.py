@@ -21,11 +21,16 @@ def is_table_of_contents_or_index(text: str, page_num: int) -> bool:
     """
     text_lower = text.lower()
     
-    # 1. Direct TOC / Index headings in the first 400 characters
-    header_sample = text_lower[:400]
-    if any(h in header_sample for h in [
-        "table of contents", "contents", "index of clauses", "policy index", "clause index",
+    # 1. Direct TOC / Index headings anywhere in early pages (pages 1-4)
+    if page_num <= 4 and any(h in text_lower for h in [
+        "table of contents", "index of clauses", "policy index", "clause index",
         "index to policy", "schedule of benefits"
+    ]):
+        return True
+
+    header_sample = text_lower[:500]
+    if any(h in header_sample for h in [
+        "table of contents", "contents", "index", "schedule of benefits"
     ]):
         return True
 
@@ -44,7 +49,7 @@ def is_table_of_contents_or_index(text: str, page_num: int) -> bool:
                 toc_pattern_lines += 1
             elif re.search(r"^\d+\.\d+\s+[A-Za-z\s]{3,40}\s+\d+$", ln):
                 toc_pattern_lines += 1
-        if toc_pattern_lines >= 3:
+        if toc_pattern_lines >= 2:
             return True
 
     return False
@@ -76,10 +81,15 @@ def score_clause_candidate(
 
     # 1. Penalty for Table of Contents / Index page
     if is_table_of_contents_or_index(text, page_num):
-        score -= 200
+        score -= 250
         rationales.append("table_of_contents_page")
 
-    # 2. Penalty for dot leaders or trailing page numbers in the matched line
+    # 2. Cover / title page 1 penalty (operative clauses reside on interior pages)
+    if page_num == 1:
+        score -= 100
+        rationales.append("page_1_cover_penalty")
+
+    # 3. Penalty for dot leaders or trailing page numbers in the matched line
     if re.search(r"(\.{3,}|…{2,}|\-{4,}|_{4,})\s*(?:page\s*)?\d+", matched_line_lower):
         score -= 150
         rationales.append("dot_leaders_detected")
@@ -88,7 +98,7 @@ def score_clause_candidate(
             score -= 100
             rationales.append("trailing_page_number")
 
-    # 3. Penalty for cross-reference or incidental definitions mention
+    # 4. Penalty for cross-reference or incidental definitions mention
     surrounding_start = max(0, match_start - 80)
     surrounding_end = min(len(text), match_end + 80)
     surrounding = text[surrounding_start:surrounding_end].lower()
@@ -101,31 +111,32 @@ def score_clause_candidate(
         score -= 50
         rationales.append("incidental_cross_reference")
 
-    # 4. Reward for operative clause heading format (starts line or near start)
+    # 5. Reward for operative clause heading format (starts line or near start)
     # e.g., "Clause 4.2 Pre-Existing Diseases" or "4.2. Pre-Existing Diseases"
     is_heading = bool(re.match(
         rf"^(?:clause|section|exclusion|condition)?\s*{re.escape(clause_num)}[\s\.\-:]+",
         matched_line_lower
     ))
     if is_heading:
-        score += 80
+        score += 90
         rationales.append("clause_heading_format")
 
-    # 5. Reward for substantive operative exclusionary / condition language in paragraph
+    # 6. Reward for substantive operative exclusionary / condition language in paragraph
     paragraph_sample = text[match_start:min(len(text), match_start + 600)].lower()
     operative_keywords = [
         "shall not be liable", "shall be excluded", "expenses related to",
         "waiting period", "continuous coverage", "is not covered", "is excluded",
         "code-excl", "the company will not pay", "condition precedent",
         "treatment of a pre-existing disease", "specific waiting period",
-        "permanent exclusion", "coverage is excluded", "pre-existing disease (ped)"
+        "permanent exclusion", "coverage is excluded", "pre-existing disease (ped)",
+        "standard exclusions"
     ]
     matched_kw_count = sum(1 for kw in operative_keywords if kw in paragraph_sample)
     if matched_kw_count > 0:
         score += min(120, matched_kw_count * 35)
         rationales.append(f"operative_language_found({matched_kw_count})")
 
-    # 6. Reward for matching ground / topic keywords from rejection letter
+    # 7. Reward for matching ground / topic keywords from rejection letter
     if stated_ground:
         ground_lower = stated_ground.lower()
         topic_keywords = [
@@ -140,10 +151,15 @@ def score_clause_candidate(
                 rationales.append(f"matches_ground_topic({gt})")
                 break
 
-    # 7. Substantial length reward (operative clauses have explanatory body text)
+    # 8. Substantial length reward (operative clauses have explanatory body text)
     if len(paragraph_sample.strip()) >= 120 and matched_kw_count > 0:
-        score += 30
+        score += 40
         rationales.append("substantial_paragraph_body")
+
+    # 9. Heavy penalty if snippet is too short and resembles an index row
+    if len(paragraph_sample.strip()) < 100 and (re.search(r"\bpage\s*\d+\b", paragraph_sample) or "..." in paragraph_sample):
+        score -= 150
+        rationales.append("short_index_snippet_penalty")
 
     return score, "; ".join(rationales)
 
@@ -199,6 +215,11 @@ class ClauseRetriever:
                 for pat in patterns:
                     match = pat.search(text)
                     if match:
+                        # Avoid bare percentage matches like 5.9%
+                        trailing = text[match.start():match.start()+30]
+                        if re.match(r"^\d+\.\d+%\s*", trailing) or trailing.strip().endswith("%"):
+                            continue
+
                         start_pos = match.start()
                         
                         # Expand backwards to beginning of line if it's a heading
@@ -255,7 +276,7 @@ class ClauseRetriever:
 
             # If the best score is below the positive operative confidence threshold (e.g. index/TOC matches or non-operative mentions),
             # this establishes that no genuine operative clause exists in the policy!
-            if best_score < 30:
+            if best_score < 40:
                 structured_logger.log_event(
                     event="clause_only_in_index_or_non_operative",
                     stage="clause_retrieval",
