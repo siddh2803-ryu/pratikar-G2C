@@ -14,6 +14,7 @@ from app.ingestion.parser import parse_policy_pdf
 from app.retrieval.retriever import ClauseRetriever, ClauseNotFoundError
 from app.rules.rule_engine import IRDAIRuleEngine
 from app.merge.grounding_gate import merge_and_assemble_verdict
+from app.models.schemas import PolicySpan
 
 client = TestClient(app)
 assets_dir = Path(__file__).resolve().parent.parent / "demo_cases" / "demo_assets"

@@ -77,8 +77,8 @@ def extract_policy_waiting_period_months(text: str) -> Optional[int]:
     if y_match:
         return int(y_match.group(1)) * 12
 
-    # Look for days: e.g. "30 days"
-    d_match = re.search(r"(\d+)\s*days\s*waiting\s*period", text, re.IGNORECASE)
+    # Look for days: e.g. "within 30 days" or "30 days waiting period"
+    d_match = re.search(r"(?:within\s*)?(\d+)\s*days\b", text, re.IGNORECASE)
     if d_match:
         days = int(d_match.group(1))
         return max(1, days // 30)

@@ -190,9 +190,10 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
         # Filter out pure dates/years (e.g. 2024, 2026)
         if v.isdigit() and int(v) > 1900:
             return False
-        # Filter out common false positives
+        # Filter out common false positives and bare keywords without identifiers
         lower_v = v.lower()
         if lower_v in {
+            "clause", "section", "exclusion", "condition", "provision", "code",
             "of", "the", "policy", "terms", "and", "conditions", "contract", "insurance",
             "number", "no", "dated", "claim", "letter", "status", "repudiation", "rejection",
             "definitions", "definition", "grievance", "ombudsman", "redressal"
@@ -247,14 +248,15 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
             return normalize_clause_output(candidate)
 
     # 3. Check operative repudiation statements in the body text (Verb -> Clause)
-    # e.g., "repudiated under Clause 4.2", "rejected as per Section 4.3", "inadmissible pursuant to Exclusion 18"
+    # e.g., "repudiated under Clause 4.2", "rejected as per Section 4.3", "rejected under Exclusion - Dental Treatment"
     body_matches = list(re.finditer(
-        r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|declin(?:ed|ing)|not\s*payable|inadmissible|excluded)\s+(?:under|as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|invoking|citing)\s+(?:policy\s+)?(?:clause|section|exclusion|condition|provision|code)[\s:]*([A-Za-z0-9\.\-_\(\)\/]+)",
+        r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|declin(?:ed|ing)|not\s*payable|inadmissible|excluded)\s+(?:under|as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|invoking|citing)\s+(?:policy\s+)?((?:clause|section|exclusion|condition|provision|code)[\s:\-\.]*[A-Za-z0-9\.\-_\(\)\/]+(?:\s*[\-:]?\s*[A-Za-z0-9\(\)\-_]+)*)",
         text,
         re.IGNORECASE,
     ))
     for m in body_matches:
         candidate = m.group(1).strip().rstrip(".:;,")
+        candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where)\b", candidate, flags=re.IGNORECASE)[0].strip()
         # Check surrounding text (120 chars before and after) to filter out non-rejection clauses
         start_ctx = max(0, m.start() - 120)
         end_ctx = min(len(text), m.end() + 120)
@@ -269,16 +271,16 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
         if is_valid_clause_id(candidate):
             return normalize_clause_output(candidate)
 
-    # 4. Check inverted body pattern: Preposition + Clause -> Repudiation Verb
-    # e.g., "As per Clause 4.2 of the policy, ... the claim has been repudiated"
-    # or "In accordance with Section 4.3 ... we regret to inform that your claim is rejected"
+    # 4. Check inverted body pattern: Preposition + Clause -> Repudiation Verb in same paragraph/section
+    # e.g., "Under Section 4.3, cataract surgery is subject to a 24-month waiting period... the authority has repudiated the claim"
     inverted_matches = list(re.finditer(
-        r"(?:as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|under)\s+(?:policy\s+)?(?:clause|section|exclusion|condition|provision|code)[\s:]*([A-Za-z0-9\.\-_\(\)\/]+)[^\.\n]{5,180}?(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|not\s*payable|inadmissible)",
+        r"(?:as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|under)\s+(?:policy\s+)?((?:clause|section|exclusion|condition|provision|code)[\s:\-\.]*[A-Za-z0-9\.\-_\(\)\/]+(?:\s*[\-:]?\s*[A-Za-z0-9\(\)\-_]+)*)[\s\S]{5,350}?(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|not\s*payable|inadmissible)",
         text,
         re.IGNORECASE,
     ))
     for m in inverted_matches:
         candidate = m.group(1).strip().rstrip(".:;,")
+        candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where|of\s+the\s+policy)\b", candidate, flags=re.IGNORECASE)[0].strip()
         start_ctx = max(0, m.start() - 100)
         end_ctx = min(len(text), m.end() + 100)
         surrounding = text[start_ctx:end_ctx].lower()
@@ -487,16 +489,37 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
 
     # Continuous tenure calculation
     continuous_months = None
-    # Check explicit months or years mentioned in text first (e.g. "65 months", "65 continuous months")
-    months_match = re.search(r"(\d+)\s*(?:continuous\s*)?months", text, re.IGNORECASE)
-    years_match = re.search(r"(\d+)\s*(?:continuous\s*)?years", text, re.IGNORECASE)
-    if months_match:
-        continuous_months = int(months_match.group(1))
-    elif years_match:
-        continuous_months = int(years_match.group(1)) * 12
-    elif policy_inception_date and rejection_date:
-        days = (rejection_date - policy_inception_date).days
-        continuous_months = max(0, days // 30)
+    # Check explicit label first: e.g. "Continuous Months: 28 months" or "Tenure: 24 months"
+    explicit_label_match = re.search(r"(?:Continuous\s*Months?|Tenure|Coverage\s*Duration)[\s:]*(\d{1,3})", text, re.IGNORECASE)
+    if explicit_label_match:
+        continuous_months = int(explicit_label_match.group(1))
+    else:
+        # Check word boundaries with 1 to 3 digits before months/years, avoiding matching trailing years from dates
+        months_match = re.search(r"\b(\d{1,3})\s*(?:continuous\s*)?months\b", text, re.IGNORECASE)
+        years_match = re.search(r"\b(\d{1,2})\s*(?:continuous\s*)?years\b", text, re.IGNORECASE)
+        if months_match:
+            continuous_months = int(months_match.group(1))
+        elif years_match:
+            continuous_months = int(years_match.group(1)) * 12
+        elif policy_inception_date and rejection_date:
+            days = (rejection_date - policy_inception_date).days
+            continuous_months = max(0, days // 30)
+
+    # Policyholder / Insured name extraction
+    policyholder_name = extract_policyholder_name_from_text(text)
+
+    return StructuredClaimRecord(
+        insurer_name=insurer_name,
+        policy_number=policy_number,
+        claim_reference=claim_reference,
+        claim_amount=claim_amount,
+        rejection_date=rejection_date,
+        stated_ground=stated_ground,
+        cited_clause_ref=cited_clause_ref,
+        policy_inception_date=policy_inception_date,
+        continuous_months=continuous_months,
+        policyholder_name=policyholder_name,
+    )
 
     # Policyholder / Insured name extraction
     policyholder_name = extract_policyholder_name_from_text(text)
