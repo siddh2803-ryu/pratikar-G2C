@@ -474,15 +474,19 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const pathParts: string[] = Array.isArray(req.query.path)
-    ? req.query.path
-    : (req.query.path ? [req.query.path] : (req.url || '').split('?')[0].split('/').filter(Boolean));
-
-  // Remove leading 'api' if present in pathParts
-  const segments = pathParts.filter(p => p !== 'api');
+  let rawSegments: string[] = [];
+  if (Array.isArray(req.query.path)) {
+    rawSegments = req.query.path;
+  } else if (typeof req.query.path === 'string') {
+    rawSegments = req.query.path.split('/');
+  } else {
+    rawSegments = (req.url || '').split('?')[0].split('/');
+  }
+  const segments = rawSegments.filter(Boolean).filter(p => p !== 'api');
+  const urlPath = (req.url || '').split('?')[0];
 
   // 1. Health: /api/health
-  if (segments[0] === 'health') {
+  if (segments[0] === 'health' || urlPath.includes('/health')) {
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).json({
       status: 'healthy',
@@ -493,8 +497,18 @@ export default async function handler(req: any, res: any) {
   }
 
   // 2. Analyses routes: /api/analyses...
-  if (segments[0] === 'analyses') {
-    const analysisId = segments[1];
+  if (segments[0] === 'analyses' || urlPath.includes('/analyses')) {
+    let analysisId = segments[1];
+
+    if (!analysisId) {
+      if (urlPath.includes('demo-case-1') || urlPath.includes('case-1')) {
+        analysisId = 'demo-case-1-strong-moratorium';
+      } else if (urlPath.includes('demo-case-2') || urlPath.includes('case-2')) {
+        analysisId = 'demo-case-2-no-clause';
+      } else if (urlPath.includes('demo-case-3') || urlPath.includes('case-3')) {
+        analysisId = 'demo-case-3-clause-mismatch';
+      }
+    }
 
     // POST /api/analyses (upload)
     if (!analysisId && req.method === 'POST') {
@@ -510,13 +524,15 @@ export default async function handler(req: any, res: any) {
 
     let analysis = DEMO_CASES[analysisId];
     if (!analysis) {
-      if (analysisId === 'case-1') analysis = DEMO_CASES['demo-case-1-strong-moratorium'];
-      else if (analysisId === 'case-2') analysis = DEMO_CASES['demo-case-2-no-clause'];
-      else if (analysisId === 'case-3') analysis = DEMO_CASES['demo-case-3-clause-mismatch'];
+      if (analysisId === 'case-1' || analysisId.includes('case-1')) analysis = DEMO_CASES['demo-case-1-strong-moratorium'];
+      else if (analysisId === 'case-2' || analysisId.includes('case-2')) analysis = DEMO_CASES['demo-case-2-no-clause'];
+      else if (analysisId === 'case-3' || analysisId.includes('case-3')) analysis = DEMO_CASES['demo-case-3-clause-mismatch'];
     }
 
+    const isAppeal = segments.includes('appeal') || urlPath.includes('/appeal');
+
     // Appeal generation: POST /api/analyses/:id/appeal
-    if (segments[2] === 'appeal' && req.method === 'POST') {
+    if (isAppeal && req.method === 'POST') {
       res.setHeader('Content-Type', 'application/json');
       const kind = analysis?.verdict?.flow === 'flow_c' ? 'grounds_request' : 'gro_letter';
       return res.status(200).json({
@@ -527,20 +543,18 @@ export default async function handler(req: any, res: any) {
     }
 
     // Appeal PDF download: GET /api/analyses/:id/appeal/:docId
-    if (segments[2] === 'appeal' && segments[3]) {
+    if (isAppeal && req.method === 'GET' && (segments.length >= 4 || urlPath.match(/\/appeal\/[^\/]+/))) {
       if (!analysis) {
         analysis = DEMO_CASES['demo-case-1-strong-moratorium'];
       }
       try {
         const bytes = await buildPdfBytes(analysis);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="appeal_${segments[3]}.pdf"`);
+        res.setHeader('Content-Disposition', `attachment; filename="appeal_${analysisId}.pdf"`);
         return res.status(200).send(Buffer.from(bytes));
       } catch (e: any) {
         return res.status(500).json({ error: e.message });
       }
-    }
-
     // GET /api/analyses/:id
     if (analysis) {
       res.setHeader('Content-Type', 'application/json');
