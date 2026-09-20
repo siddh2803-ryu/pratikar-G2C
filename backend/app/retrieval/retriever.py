@@ -15,9 +15,142 @@ class ClauseNotFoundError(Exception):
         self.message = message
 
 
+def is_table_of_contents_or_index(text: str, page_num: int) -> bool:
+    """Detects whether a policy page/chunk is a Table of Contents, Index, or Schedule listing
+    rather than an operative contractual provision.
+    """
+    text_lower = text.lower()
+    
+    # 1. Direct TOC / Index headings in the first 400 characters
+    header_sample = text_lower[:400]
+    if any(h in header_sample for h in [
+        "table of contents", "contents", "index of clauses", "policy index", "clause index",
+        "index to policy", "schedule of benefits"
+    ]):
+        return True
+
+    # 2. Presence of dot leaders or dash leaders linking items to page numbers
+    # e.g., "Clause 4.2 ................... Page 14" or "4.2 Pre-existing ... 14"
+    dot_leader_count = len(re.findall(r"(\.{3,}|…{2,}|\-{4,}|_{4,})\s*(?:page\s*)?\d+", text_lower))
+    if dot_leader_count >= 2:
+        return True
+
+    # 3. High density of line endings with bare page numbers in early pages (pages 1-5)
+    if page_num <= 5:
+        lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+        toc_pattern_lines = 0
+        for ln in lines:
+            if re.search(r"(?:section|clause|\d+\.\d+)[^\n]{3,60}(?:\.{2,}|\s{3,})\s*(?:page\s*)?\d+$", ln, re.IGNORECASE):
+                toc_pattern_lines += 1
+            elif re.search(r"^\d+\.\d+\s+[A-Za-z\s]{3,40}\s+\d+$", ln):
+                toc_pattern_lines += 1
+        if toc_pattern_lines >= 3:
+            return True
+
+    return False
+
+
+def score_clause_candidate(
+    chunk: PolicyChunk,
+    match_start: int,
+    match_end: int,
+    clause_num: str,
+    clean_ref: str,
+    stated_ground: Optional[str] = None,
+) -> Tuple[int, str]:
+    """Scores a candidate clause match to distinguish operative provisions from index entries,
+    cross-references, and footers.
+    Returns (score, rationale).
+    """
+    text = chunk.text
+    page_num = chunk.page_number
+    line_start = text.rfind("\n", 0, match_start)
+    line_start = 0 if line_start == -1 else line_start + 1
+    line_end = text.find("\n", match_end)
+    line_end = len(text) if line_end == -1 else line_end
+    matched_line = text[line_start:line_end].strip()
+    matched_line_lower = matched_line.lower()
+
+    score = 0
+    rationales = []
+
+    # 1. Penalty for Table of Contents / Index page
+    if is_table_of_contents_or_index(text, page_num):
+        score -= 200
+        rationales.append("table_of_contents_page")
+
+    # 2. Penalty for dot leaders or trailing page numbers in the matched line
+    if re.search(r"(\.{3,}|…{2,}|\-{4,}|_{4,})\s*(?:page\s*)?\d+", matched_line_lower):
+        score -= 150
+        rationales.append("dot_leaders_detected")
+    elif re.search(r"\bpage\s+\d+\s*$", matched_line_lower) or re.search(r"\s+\d+\s*$", matched_line_lower):
+        if len(matched_line) < 80:
+            score -= 100
+            rationales.append("trailing_page_number")
+
+    # 3. Penalty for cross-reference or incidental definitions mention
+    surrounding_start = max(0, match_start - 80)
+    surrounding_end = min(len(text), match_end + 80)
+    surrounding = text[surrounding_start:surrounding_end].lower()
+    if any(xref in surrounding for xref in [
+        "as defined under", "as specified in", "referred to in", "refer to clause",
+        "in accordance with clause", "subject to clause", "clause 1.1", "grievance redressal",
+        "ombudsman", "arbitration"
+    ]):
+        score -= 50
+        rationales.append("incidental_cross_reference")
+
+    # 4. Reward for operative clause heading format (starts line or near start)
+    # e.g., "Clause 4.2 Pre-Existing Diseases" or "4.2. Pre-Existing Diseases"
+    is_heading = bool(re.match(
+        rf"^(?:clause|section|exclusion|condition)?\s*{re.escape(clause_num)}[\s\.\-:]+",
+        matched_line_lower
+    ))
+    if is_heading:
+        score += 80
+        rationales.append("clause_heading_format")
+
+    # 5. Reward for substantive operative exclusionary / condition language in paragraph
+    paragraph_sample = text[match_start:min(len(text), match_start + 600)].lower()
+    operative_keywords = [
+        "shall not be liable", "shall be excluded", "expenses related to",
+        "waiting period", "continuous coverage", "is not covered", "is excluded",
+        "code-excl", "the company will not pay", "condition precedent",
+        "treatment of a pre-existing disease", "specific waiting period",
+        "permanent exclusion", "coverage is excluded", "pre-existing disease (ped)"
+    ]
+    matched_kw_count = sum(1 for kw in operative_keywords if kw in paragraph_sample)
+    if matched_kw_count > 0:
+        score += min(120, matched_kw_count * 35)
+        rationales.append(f"operative_language_found({matched_kw_count})")
+
+    # 6. Reward for matching ground / topic keywords from rejection letter
+    if stated_ground:
+        ground_lower = stated_ground.lower()
+        topic_keywords = [
+            "pre-existing", "hypertension", "diabetes", "cardiac", "waiting period",
+            "cataract", "hernia", "joint replacement", "congenital", "cosmetic",
+            "dental", "non-disclosure", "investigation"
+        ]
+        ground_topics = [t for t in topic_keywords if t in ground_lower]
+        for gt in ground_topics:
+            if gt in paragraph_sample:
+                score += 40
+                rationales.append(f"matches_ground_topic({gt})")
+                break
+
+    # 7. Substantial length reward (operative clauses have explanatory body text)
+    if len(paragraph_sample.strip()) >= 120 and matched_kw_count > 0:
+        score += 30
+        rationales.append("substantial_paragraph_body")
+
+    return score, "; ".join(rationales)
+
+
 class ClauseRetriever:
     """Path B: Clause Retrieval engine.
-    Finds the exact clause in policy chunks, quotes verbatim, and anchors to page_number.
+    Finds the exact operative clause in policy chunks, quotes verbatim, filters out index/TOC pages,
+    and anchors to page_number.
     """
     def retrieve_clause(
         self,
@@ -35,45 +168,77 @@ class ClauseRetriever:
                 )
                 raise ClauseNotFoundError("not determinable from the documents provided")
 
-            # Normalise search pattern for clause: e.g. "Clause 4.2" or "4.2"
+            # Normalise search pattern for clause: e.g. "Clause 4.2" -> clause_num="4.2"
             clean_ref = clause_ref.strip()
-            # Extract number if possible: "4.2" from "Clause 4.2"
-            num_match = re.search(r"(\d+(?:\.\d+)+)", clean_ref)
-            clause_num = num_match.group(1) if num_match else clean_ref
+            
+            # Extract number / identifier if present:
+            # Handles: "Clause 4.2" -> "4.2", "Section 4.1(a)" -> "4.1(a)", "Exclusion 18" -> "18", "Code-Excl01" -> "Code-Excl01"
+            num_match = re.search(r"(\d+(?:\.\d+)*[A-Za-z0-9\(\)\-_]*)", clean_ref)
+            code_match = re.search(r"(Code[\-_]Excl\d+)", clean_ref, re.IGNORECASE)
+            
+            clause_num = code_match.group(1) if code_match else (num_match.group(1) if num_match else clean_ref)
 
-            candidate_matches: List[Tuple[PolicyChunk, int, int, str]] = []
+            candidate_matches: List[Tuple[PolicyChunk, int, int, str, int, str]] = []
 
             for chunk in chunks:
                 text = chunk.text
-                # Look for exact clause heading or text pattern
-                # e.g., "Clause 4.2", "4.2 Pre-existing", "Section 4.2"
                 patterns = [
                     re.compile(rf"\bClause\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\bSection\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\bExclusion\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\bCondition\s+{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"(?:^|\n)\s*{re.escape(clause_num)}[\s\.\-:]+[A-Z]", re.IGNORECASE),
+                    re.compile(rf"\b{re.escape(clause_num)}\b", re.IGNORECASE),
                     re.compile(rf"\b{re.escape(clean_ref)}\b", re.IGNORECASE),
                 ]
+
+                # If clause has an exclusion code like Code-Excl01
+                if code_match:
+                    patterns.insert(0, re.compile(rf"\b{re.escape(code_match.group(1))}\b", re.IGNORECASE))
 
                 for pat in patterns:
                     match = pat.search(text)
                     if match:
                         start_pos = match.start()
-                        # Extract the clause paragraph (up to 600 chars or next clause heading)
-                        end_pos = min(len(text), start_pos + 650)
-                        # Try to find paragraph break
-                        next_break = text.find("\n\n", start_pos + 50)
-                        if next_break != -1 and next_break < start_pos + 700:
-                            end_pos = next_break
+                        
+                        # Expand backwards to beginning of line if it's a heading
+                        line_start = text.rfind("\n", 0, start_pos)
+                        line_start = 0 if line_start == -1 else line_start + 1
+                        if start_pos - line_start < 25:
+                            start_pos = line_start
+
+                        # Extract operative clause section (up to next clause heading or paragraph boundary)
+                        end_pos = min(len(text), start_pos + 800)
+                        
+                        # Check for next clause heading: e.g. "\nClause 4.3" or "\n4.3" or "\nSection"
+                        next_heading = re.search(
+                            r"\n\s*(?:Clause|Section|Exclusion|Condition|\d+\.\d+)\s+[\dA-Za-z]",
+                            text[start_pos + 60:end_pos]
+                        )
+                        if next_heading:
+                            end_pos = start_pos + 60 + next_heading.start()
+                        else:
+                            # Try finding paragraph break
+                            next_break = text.find("\n\n", start_pos + 80)
+                            if next_break != -1 and next_break < end_pos:
+                                end_pos = next_break
 
                         quoted_text = text[start_pos:end_pos].strip()
-                        candidate_matches.append((chunk, start_pos, end_pos, quoted_text))
+                        
+                        # Score this candidate
+                        score, rationale = score_clause_candidate(
+                            chunk=chunk,
+                            match_start=start_pos,
+                            match_end=end_pos,
+                            clause_num=clause_num,
+                            clean_ref=clean_ref,
+                            stated_ground=stated_ground,
+                        )
+                        
+                        candidate_matches.append((chunk, start_pos, end_pos, quoted_text, score, rationale))
                         break
 
             if not candidate_matches:
-                # PRD §14 condition: Cited clause not found in the policy (Clause/Policy Mismatch)
-                # Strict quote-or-abstain enforcement: NEVER grab arbitrary PDF text
                 structured_logger.log_event(
                     event="clause_not_found_in_policy",
                     stage="clause_retrieval",
@@ -81,12 +246,31 @@ class ClauseRetriever:
                     details={"clause_ref": clause_ref, "searched_num": clause_num},
                 )
                 raise ClauseNotFoundError(
-                    f"The clause your insurer cited ({clean_ref}) does not appear in this policy document. This establishes a clause/policy mismatch."
+                    f"The clause your insurer cited ({clean_ref}) does not appear anywhere in this policy document. This establishes a clause/policy mismatch."
                 )
 
-            # Pick best match
-            best_chunk, start_idx, end_idx, verbatim_text = candidate_matches[0]
-            
+            # Sort candidates by score descending
+            candidate_matches.sort(key=lambda x: x[4], reverse=True)
+            best_chunk, start_idx, end_idx, verbatim_text, best_score, best_rationale = candidate_matches[0]
+
+            # If the best score is heavily negative (e.g. only index/TOC matches were found),
+            # this proves the clause exists ONLY as an index entry and NOT as an operative provision!
+            if best_score < 0:
+                structured_logger.log_event(
+                    event="clause_only_in_index_or_non_operative",
+                    stage="clause_retrieval",
+                    level="WARNING",
+                    details={
+                        "clause_ref": clause_ref,
+                        "best_page": best_chunk.page_number,
+                        "best_score": best_score,
+                        "rationale": best_rationale,
+                    },
+                )
+                raise ClauseNotFoundError(
+                    f"The clause cited by your insurer ({clean_ref}) appears only in an index or table of contents (Page {best_chunk.page_number}), but no operative policy provision defining this clause exists in the policy contract. This establishes a clause/policy mismatch."
+                )
+
             structured_logger.log_event(
                 event="clause_retrieved_verbatim",
                 stage="clause_retrieval",
@@ -94,6 +278,8 @@ class ClauseRetriever:
                     "clause_ref": clause_ref,
                     "page_number": best_chunk.page_number,
                     "char_span": [start_idx, end_idx],
+                    "score": best_score,
+                    "rationale": best_rationale,
                 },
             )
 

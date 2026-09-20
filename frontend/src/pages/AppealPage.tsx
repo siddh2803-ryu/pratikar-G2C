@@ -3,6 +3,7 @@ import { Download, Trash2, ArrowLeft } from 'lucide-react';
 import { api, StructuredClaimRecord, Verdict } from '../api/client';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { useLanguage } from '../context/LanguageContext';
+import { generateAppealPdfBytes } from '../utils/generatePdf';
 
 interface AppealPageProps {
   analysisId: string;
@@ -29,6 +30,58 @@ export const AppealPage: React.FC<AppealPageProps> = ({
   const { language, t, translateDynamic } = useLanguage();
   const isFlowC = appealKind === 'grounds_request';
   const downloadUrl = api.getAppealDownloadUrl(analysisId, documentId);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      let pdfBlob: Blob | null = null;
+      // 1. Try to fetch from backend
+      try {
+        const res = await fetch(downloadUrl);
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/pdf')) {
+          const buffer = await res.arrayBuffer();
+          const header = new Uint8Array(buffer.slice(0, 4));
+          const isPdf = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46; // %PDF
+          if (isPdf) {
+            pdfBlob = new Blob([buffer], { type: 'application/pdf' });
+          }
+        }
+      } catch (e) {
+        console.warn('Backend download returned non-PDF or failed, switching to client generator:', e);
+      }
+
+      // 2. If backend response was HTML (Vercel SPA rewrite) or failed, generate high-fidelity vector PDF
+      if (!pdfBlob) {
+        const bytes = await generateAppealPdfBytes({
+          claimRecord,
+          verdict,
+          appealKind,
+          language,
+        });
+        pdfBlob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      }
+
+      // 3. Trigger clean browser download
+      const filename = isFlowC
+        ? `Request_for_Grounds_${claimRecord.claim_reference || 'Claim'}.pdf`
+        : `GRO_Appeal_Letter_${claimRecord.claim_reference || 'Claim'}.pdf`;
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const tempLink = document.createElement('a');
+      tempLink.href = blobUrl;
+      tempLink.download = filename;
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      document.body.removeChild(tempLink);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate and download PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handleDisposal = async () => {
     if (confirm(t('appeal.confirm_disposal'))) {
@@ -164,15 +217,15 @@ export const AppealPage: React.FC<AppealPageProps> = ({
       {/* Action Footer */}
       <div className="p-6 bg-slate-100 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         {/* Download Button */}
-        <a
-          href={downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all"
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 active:bg-brand-800 disabled:opacity-75 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
-          <Download className="w-4 h-4" />
-          <span>{t('appeal.btn_download')}</span>
-        </a>
+          <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
+          <span>{downloading ? t('appeal.btn_downloading') : t('appeal.btn_download')}</span>
+        </button>
 
         {/* Privacy Disposal Button (FR-13) */}
         <button

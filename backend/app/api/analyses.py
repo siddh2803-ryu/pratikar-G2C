@@ -105,6 +105,7 @@ async def start_analysis(
             rule_results=rule_results,
             policy_span=policy_span,
             clause_error_msg=clause_error_msg,
+            policy_chunks=policy_chunks,
         )
     except GroundingGateError as gge:
         db.update_session(analysis_id, {"status": "failed", "error": {"code": "UNGROUNDABLE", "message": gge.message}})
