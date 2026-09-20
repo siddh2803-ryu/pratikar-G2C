@@ -59,7 +59,57 @@ DEMO_CASE_1 = {
     },
 }
 
-# Demo Case 2: MODERATE / FLOW C — Rejection Letter Does Not Specify a Rejection Clause
+# Demo Case 2 (Flow B): WEAK VERDICT — Legally Valid Rejection (30-Day Initial Exclusion)
+# Policy incepted 2026-08-06, claim filed 2026-08-18 (Day 12).
+# Repudiation under Clause 4.1 is contractually and legally supported (PRD FR-12).
+DEMO_CASE_2_WEAK = {
+    "analysis_id": "demo-case-2-weak-valid-rejection",
+    "status": "complete",
+    "claim_record": {
+        "insurer_name": "Bajaj Allianz General Insurance",
+        "policy_number": "OG-26-1902-1801-00001234",
+        "claim_reference": "BAGIC/2026/CLM/99102",
+        "claim_amount": 75000.0,
+        "rejection_date": "2026-08-18",
+        "stated_ground": "Repudiation under Clause 4.1: Claim occurred within initial 30 days waiting period.",
+        "cited_clause_ref": "Clause 4.1",
+        "policy_inception_date": "2026-08-06",
+        "continuous_months": 0,
+        "policyholder_name": "Amit Sharma",
+    },
+    "verdict": {
+        "level": "weak",
+        "summary": "The insurer's repudiation is legally and contractually valid under operative policy waiting period provisions.",
+        "reasons": [
+            "The insurer repudiated the claim citing Clause 4.1 (30-day initial waiting period for illnesses other than accidents).",
+            "The policy incepted on 2026-08-06 and the hospitalization occurred on 2026-08-18 (after only 12 days of active coverage).",
+            "Under IRDAI Master Circular on Operations 2024 and standard health insurance policy conditions, an initial waiting period of 30 days from inception is statutorily and contractually valid. No appeal grounds exist for this repudiation.",
+        ],
+        "evidence_trail": [
+            {
+                "id": "ev_demo_weak_1",
+                "statement": "Policy Clause 4.1 specifies an initial waiting period of 30 days from inception during which illness claims are excluded.",
+                "source_type": "policy_span",
+                "page_number": 8,
+                "source_text": "Clause 4.1 Initial 30-Day Waiting Period: A waiting period of 30 days from the inception date of the policy will be applicable for all illness claims except accidental injuries.",
+                "ordinal": 1,
+            },
+            {
+                "id": "ev_demo_weak_2",
+                "statement": "The claim occurred 12 days after policy inception, falling squarely within the contractually operative 30-day exclusion window.",
+                "source_type": "provision",
+                "provision_ref": "IRDAI Health Insurance Regulations / Waiting Period Norms",
+                "source_text": "[IRDAI Norms]: Insurers are permitted an initial 30-day waiting period from policy inception for all illnesses. Repudiation within this window is valid.",
+                "ordinal": 2,
+            },
+        ],
+        "flow": "flow_b",
+        "grounds_letter_available": False,
+        "appeal_available": False,
+    },
+}
+
+# Demo Case 3 (Flow C): MODERATE / FLOW C — Rejection Letter Does Not Specify a Rejection Clause
 # Care Health letter repudiates without citing any policy clause, exclusion, or condition.
 # Pratikar detects absence of rejection clause and generates Request-for-Grounds letter.
 DEMO_CASE_2 = {
@@ -72,7 +122,7 @@ DEMO_CASE_2 = {
         "claim_amount": 92000.0,
         "rejection_date": "2026-08-18",
         "stated_ground": "Claim repudiated as per terms and conditions of the policy.",
-        "cited_clause_ref": None, # ABSENT! Drives Flow C
+        "cited_clause_ref": None,  # ABSENT! Drives Flow C
         "policy_inception_date": "2026-08-06",
         "continuous_months": 0,
         "policyholder_name": "Sneha Verma",
@@ -101,7 +151,7 @@ DEMO_CASE_2 = {
     },
 }
 
-# Demo Case 3: STRONG VERDICT — Rejection Letter Cites a Clause That Does Not Exist in Policy
+# Demo Case 4 (Flow A): STRONG VERDICT — Rejection Letter Cites a Clause That Does Not Exist in Policy
 # HDFC ERGO repudiation cites Clause 5.9, but Clause 5.9 does NOT exist in the policy wording.
 # System detects Clause/Policy Mismatch and generates official GRO Appeal.
 DEMO_CASE_3 = {
@@ -114,7 +164,7 @@ DEMO_CASE_3 = {
         "claim_amount": 165000.0,
         "rejection_date": "2026-08-20",
         "stated_ground": "Repudiation under Clause 5.9: Treatment excluded under specific non-contracted waiting period schedule.",
-        "cited_clause_ref": "Clause 5.9", # CITED IN LETTER BUT ABSENT IN POLICY!
+        "cited_clause_ref": "Clause 5.9",  # CITED IN LETTER BUT ABSENT IN POLICY!
         "policy_inception_date": "2023-01-15",
         "continuous_months": 43,
         "policyholder_name": "Vikram Malhotra",
@@ -153,11 +203,13 @@ DEMO_CASE_3 = {
 
 DEMO_REGISTRY: Dict[str, Dict[str, Any]] = {
     "case-1": DEMO_CASE_1,
-    "case-2": DEMO_CASE_2,
-    "case-3": DEMO_CASE_3,
+    "case-2": DEMO_CASE_2_WEAK,
+    "case-3": DEMO_CASE_2,
+    "case-4": DEMO_CASE_3,
     "demo-case-1-strong-moratorium": DEMO_CASE_1,
+    "demo-case-2-weak-valid-rejection": DEMO_CASE_2_WEAK,
     "demo-case-2-no-clause": DEMO_CASE_2,
-    "demo-case-2-weak-valid-rejection": DEMO_CASE_2,
+    "demo-case-3-vague-no-clause": DEMO_CASE_2,
     "demo-case-3-clause-mismatch": DEMO_CASE_3,
-    "demo-case-3-vague-no-clause": DEMO_CASE_3,
+    "demo-case-4-clause-mismatch": DEMO_CASE_3,
 }

@@ -3,6 +3,7 @@ Extracts the Structured Claim Record from rejection letter PDFs and photographed
 Implements Pillow image deskewing, two-provider LLM failover, and zero-guess field population (PRD FR-02, SEC-10).
 """
 import io
+import json
 import re
 from datetime import date, datetime
 from typing import Optional, Dict, Any, Tuple
@@ -213,9 +214,11 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
         # If it's pure number or alphanumeric (e.g. 4.2, 4.1(a), IV.B)
         return f"Clause {cid}"
 
+    CLAUSE_KW = r"(?:Clause|Section|Exclusion|Condition|Provision|Code)"
+
     # 1. Check explicit Subject / Reference line explicitly tying rejection to a clause
     subj_match = re.search(
-        r"(?:SUB|SUBJECT|RE)\s*:\s*.*?(?:REPUDIATION|REJECTION|DENIAL|DISALLOWANCE|UNADMISSIBLE|NON[\-\s]PAYABLE).*?(?:UNDER|AS\s*PER|IN\s*TERMS\s*OF|PURSUANT\s*TO)?\s*(?:POLICY\s+)?(?:CLAUSE|SECTION|EXCLUSION|CONDITION|PROVISION|CODE)\s*([A-Za-z0-9\.\-_\(\)\/]+(?:\s*\(?[A-Za-z0-9\s\-]+\)?)?)",
+        r"(?:SUB|SUBJECT|RE)\s*:\s*.*?(?:REPUDIATION|REJECTION|DENIAL|DISALLOWANCE|UNADMISSIBLE|NON[\-\s]PAYABLE).*?(?:UNDER|AS\s*PER|IN\s*TERMS\s*OF|PURSUANT\s*TO)?\s*(?:POLICY\s+)?(" + CLAUSE_KW + r"[\s:\-\.]+[A-Za-z0-9\.\-_\(\)\/]+(?:\s+[A-Za-z0-9\.\-_\(\)\/]+){0,4})",
         text,
         re.IGNORECASE,
     )
@@ -227,7 +230,7 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
 
     # Check reverse subject format: e.g. "RE: REPUDIATION UNDER CLAUSE 4.1" or "SUB: CLAUSE 4.2 - REPUDIATION"
     subj_match2 = re.search(
-        r"(?:SUB|SUBJECT|RE)\s*:\s*.*?(?:CLAUSE|SECTION|EXCLUSION|CONDITION|PROVISION|CODE)\s*([A-Za-z0-9\.\-_\(\)\/]+).*?(?:REPUDIATION|REJECTION|DENIAL|DISALLOWANCE|UNADMISSIBLE|NON[\-\s]PAYABLE|WAITING\s*PERIOD)",
+        r"(?:SUB|SUBJECT|RE)\s*:\s*.*?(" + CLAUSE_KW + r"[\s:\-\.]+[A-Za-z0-9\.\-_\(\)\/]+).*?(?:REPUDIATION|REJECTION|DENIAL|DISALLOWANCE|UNADMISSIBLE|NON[\-\s]PAYABLE|WAITING\s*PERIOD)",
         text,
         re.IGNORECASE,
     )
@@ -238,7 +241,7 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
 
     # 2. Check explicit stated grounds / reason line for a clause reference
     ground_clause_match = re.search(
-        r"(?:Stated\s*Grounds?|Repudiation\s*Grounds?|Repudiation\s*Reason|Reason\s*for\s*(?:Repudiation|Rejection|Denial)|Grounds?\s*for\s*(?:Repudiation|Rejection|Denial)|Denial\s*Reason|Rejection\s*Reason|Basis\s*of\s*(?:Repudiation|Rejection)|Applicable\s*(?:Policy\s*)?(?:Clause|Section|Exclusion|Provision)|Clause\s*Cited)[\s:]+.*?(?:Clause|Section|Exclusion|Condition|Provision|Code)\s*([A-Za-z0-9\.\-_\(\)\/]+)",
+        r"(?:Stated\s*Grounds?|Repudiation\s*Grounds?|Repudiation\s*Reason|Reason\s*for\s*(?:Repudiation|Rejection|Denial)|Grounds?\s*for\s*(?:Repudiation|Rejection|Denial)|Denial\s*Reason|Rejection\s*Reason|Basis\s*of\s*(?:Repudiation|Rejection)|Applicable\s*(?:Policy\s*)?(?:Clause|Section|Exclusion|Provision)|Clause\s*Cited)[\s:]+.*?(" + CLAUSE_KW + r"[\s:\-\.]+[A-Za-z0-9\.\-_\(\)\/]+(?:\s+[A-Za-z0-9\.\-_\(\)\/]+){0,4})",
         text,
         re.IGNORECASE,
     )
@@ -247,76 +250,70 @@ def extract_rejection_clause_from_text(text: str) -> Optional[str]:
         if is_valid_clause_id(candidate):
             return normalize_clause_output(candidate)
 
-    # 3. Check operative repudiation statements in the body text (Verb -> Clause)
-    # e.g., "repudiated under Clause 4.2", "rejected as per Section 4.3", "rejected under Exclusion - Dental Treatment"
-    body_matches = list(re.finditer(
-        r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|declin(?:ed|ing)|not\s*payable|inadmissible|excluded)\s+(?:under|as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|invoking|citing)\s+(?:policy\s+)?((?:clause|section|exclusion|condition|provision|code)[\s:\-\.]*[A-Za-z0-9\.\-_\(\)\/]+(?:\s*[\-:]?\s*[A-Za-z0-9\(\)\-_]+)*)",
-        text,
-        re.IGNORECASE,
-    ))
-    for m in body_matches:
-        candidate = m.group(1).strip().rstrip(".:;,")
-        candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where)\b", candidate, flags=re.IGNORECASE)[0].strip()
-        # Check surrounding text (120 chars before and after) to filter out non-rejection clauses
-        start_ctx = max(0, m.start() - 120)
-        end_ctx = min(len(text), m.end() + 120)
-        surrounding = text[start_ctx:end_ctx].lower()
+    # 3. Paragraph-based search for repudiation statements in body text
+    # Avoids catastrophic regex backtracking by scoping strictly to repudiation paragraphs
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paragraphs) <= 1:
+        paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
 
-        if any(ign in surrounding for ign in [
-            "grievance", "ombudsman", "redressal", "appellate", "arbitration",
-            "jurisdiction", "definition", "contact us", "toll free", "irdai circular"
-        ]):
+    for para in paragraphs:
+        lower_p = para.lower()
+        if any(ign in lower_p for ign in ["grievance", "ombudsman", "redressal", "appellate", "arbitration", "definitions for terms", "definition"]):
             continue
 
-        if is_valid_clause_id(candidate):
-            return normalize_clause_output(candidate)
-
-    # 4. Check inverted body pattern: Preposition + Clause -> Repudiation Verb in same paragraph/section
-    # e.g., "Under Section 4.3, cataract surgery is subject to a 24-month waiting period... the authority has repudiated the claim"
-    inverted_matches = list(re.finditer(
-        r"(?:as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|under)\s+(?:policy\s+)?((?:clause|section|exclusion|condition|provision|code)[\s:\-\.]*[A-Za-z0-9\.\-_\(\)\/]+(?:\s*[\-:]?\s*[A-Za-z0-9\(\)\-_]+)*)[\s\S]{5,350}?(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|not\s*payable|inadmissible)",
-        text,
-        re.IGNORECASE,
-    ))
-    for m in inverted_matches:
-        candidate = m.group(1).strip().rstrip(".:;,")
-        candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where|of\s+the\s+policy)\b", candidate, flags=re.IGNORECASE)[0].strip()
-        start_ctx = max(0, m.start() - 100)
-        end_ctx = min(len(text), m.end() + 100)
-        surrounding = text[start_ctx:end_ctx].lower()
-        if any(ign in surrounding for ign in ["grievance", "ombudsman", "redressal", "definition", "arbitration"]):
+        has_repud = any(w in lower_p for w in [
+            "repudiat", "reject", "deni", "disallow", "declin", "not payable",
+            "inadmissible", "excluded", "waiting period", "bars coverage", "preclude"
+        ])
+        if not has_repud:
             continue
-        if is_valid_clause_id(candidate):
-            return normalize_clause_output(candidate)
 
-    # 5. Check if clause is explicitly stated as operative exclusion / bar
-    # e.g., "Clause 4.2 of the policy bars coverage", "Exclusion 4.1 applies"
-    exclusion_matches = list(re.finditer(
-        r"(?:Clause|Section|Exclusion|Condition|Provision)\s*([A-Za-z0-9\.\-_\(\)\/]+)\s+(?:of\s+the\s+policy\s+)?(?:bars|precludes|excludes|disallows|is\s+invoked|applies)",
-        text,
-        re.IGNORECASE,
-    ))
-    for m in exclusion_matches:
-        candidate = m.group(1).strip().rstrip(".:;,")
-        start_ctx = max(0, m.start() - 100)
-        end_ctx = min(len(text), m.end() + 100)
-        surrounding = text[start_ctx:end_ctx].lower()
-        if any(ign in surrounding for ign in ["grievance", "ombudsman", "redressal", "definition", "arbitration"]):
-            continue
-        if is_valid_clause_id(candidate):
-            return normalize_clause_output(candidate)
+        # Check verb -> clause (e.g., "repudiated under Clause 4.2", "rejected under Exclusion - Dental Treatment")
+        m = re.search(
+            r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|disallow(?:ed|ance)|declin(?:ed|ing)|not\s*payable|inadmissible|excluded)\s+(?:under|as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|invoking|citing)\s+(?:policy\s+)?(" + CLAUSE_KW + r"[\s:\-\.]+[A-Za-z0-9\.\-_\(\)\/]+(?:\s+[A-Za-z0-9\.\-_\(\)\/]+){0,4})",
+            para,
+            re.IGNORECASE,
+        )
+        if m:
+            candidate = m.group(1).strip().rstrip(".:;,")
+            candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where|of\s+the\s+policy)\b", candidate, flags=re.IGNORECASE)[0].strip()
+            if is_valid_clause_id(candidate):
+                return normalize_clause_output(candidate)
 
-    # 6. Check for named exclusion patterns
-    # e.g. "Exclusion - Pre-Existing Diseases", "Exclusion: Dental Treatment", "Code-Excl01"
-    named_matches = list(re.finditer(
-        r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|excluded)\s+under\s+((?:Code[\-_]Excl\d+)|(?:Exclusion\s*[\-:]\s*[A-Za-z\s]{3,35}))",
-        text,
-        re.IGNORECASE,
-    ))
-    for m in named_matches:
-        candidate = m.group(1).strip().rstrip(".:;,")
-        if is_valid_clause_id(candidate):
-            return normalize_clause_output(candidate)
+        # Check preposition -> clause within repudiation paragraph (e.g., "Under Section 4.3... repudiated the claim")
+        m = re.search(
+            r"(?:as\s*per|in\s*terms\s*of|pursuant\s*to|in\s*accordance\s*with|under)\s+(?:policy\s+)?(" + CLAUSE_KW + r"[\s:\-\.]+[A-Za-z0-9\.\-_\(\)\/]+(?:\s+[A-Za-z0-9\.\-_\(\)\/]+){0,4})",
+            para,
+            re.IGNORECASE,
+        )
+        if m:
+            candidate = m.group(1).strip().rstrip(".:;,")
+            candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where|of\s+the\s+policy)\b", candidate, flags=re.IGNORECASE)[0].strip()
+            if is_valid_clause_id(candidate):
+                return normalize_clause_output(candidate)
+
+        # Check named exclusion (explicit e.g., "Code-Excl01" or "Exclusion - Dental Treatment")
+        m = re.search(
+            r"(?:repudiat(?:ed|ion)|reject(?:ed|ion)|deni(?:ed|al)|excluded)\s+under\s+((?:Code[\-_]Excl\d+)|(?:Exclusion\s*[\-:]\s*[A-Za-z\s]{3,35}))",
+            para,
+            re.IGNORECASE,
+        )
+        if m:
+            candidate = m.group(1).strip().rstrip(".:;,")
+            candidate = re.split(r"\s+(?:as|for|due\s+to|dated|which|where)\b", candidate, flags=re.IGNORECASE)[0].strip()
+            if is_valid_clause_id(candidate):
+                return normalize_clause_output(candidate)
+
+        # Check operative bar (e.g., "Clause 4.2 of the policy bars coverage")
+        m = re.search(
+            r"(" + CLAUSE_KW + r"\s*[A-Za-z0-9\.\-_\(\)\/]+)\s+(?:of\s+the\s+policy\s+)?(?:bars|precludes|excludes|disallows|is\s+invoked|applies)",
+            para,
+            re.IGNORECASE,
+        )
+        if m:
+            candidate = m.group(1).strip().rstrip(".:;,")
+            if is_valid_clause_id(candidate):
+                return normalize_clause_output(candidate)
 
     # If no clause explicitly tied to rejection/repudiation was found, return None
     # Strictly quote-or-abstain enforcement (PRD FR-02, Flow C).
@@ -431,17 +428,34 @@ def heuristic_claim_extractor(text: str) -> StructuredClaimRecord:
             insurer_name = ins
             break
 
-    # Policy number
-    policy_num_match = re.search(r"(?:Policy\s*(?:No|Number|#)[\s:]*)([A-Z0-9\/\-\_]+)", text, re.IGNORECASE)
-    policy_number = policy_num_match.group(1).strip() if policy_num_match else None
-
-    # Claim reference
-    claim_ref_match = re.search(
-        r"(?:Claim\s*(?:Reference\s*ID|Reference\s*No|Reference\s*Number|Reference|Docket\s*(?:No|ID|Number)|ID|No|Number|#)[\s:]*)([A-Z0-9\/\-\_]+)",
+    # Policy number (handles spaced 16-digit numbers like '2801 2049 1928 0000' and alphanumeric IDs)
+    policy_num_match = re.search(
+        r"(?:Policy\s*(?:No\.?|Number|#)[\s:\-\|]*)([A-Z0-9\/\-\_]+(?:\s+[A-Z0-9\/\-\_]+)*)",
         text,
         re.IGNORECASE,
     )
-    claim_reference = claim_ref_match.group(1).strip() if claim_ref_match else None
+    policy_number = None
+    if policy_num_match:
+        cand = policy_num_match.group(1).strip()
+        cand = re.split(r"\s+(?:Inception|Continuous|Date|Claim|Amount|INR|Rs|Period|Valid|From)\b", cand, flags=re.IGNORECASE)[0].strip()
+        if len(cand) >= 4 and not cand.lower().startswith("number"):
+            policy_number = cand
+
+    # Claim reference (handles 'Claim Reference ID: CIR/2026/...', 'Docket No', 'CIR', preventing label capture of 'ID')
+    claim_ref_match = re.search(
+        r"(?:Claim\s*(?:Reference\s*(?:ID|No|Number)?|Docket\s*(?:ID|No|Number)?|ID|No|Number|#)?|CIR\s*(?:ID|No)?)[\s:\-\|]+([A-Z0-9][A-Z0-9\/\-\_]{3,35})",
+        text,
+        re.IGNORECASE,
+    )
+    claim_reference = None
+    if claim_ref_match:
+        cand = claim_ref_match.group(1).strip().rstrip(".:;,")
+        if cand.upper() not in {"ID", "NO", "NUMBER", "REF", "DOCKET", "CIR"}:
+            claim_reference = cand
+    if not claim_reference:
+        cir_match = re.search(r"\b((?:CIR|CARE|HD|STAR|REP)/\d{4}/[A-Z0-9/\-_]+)\b", text, re.IGNORECASE)
+        if cir_match:
+            claim_reference = cir_match.group(1).strip()
 
     # Claim amount
     amount_match = re.search(r"(?:Claimed\s*Amount|Claim\s*Amount|Amount\s*disputed|Rs\.?|INR)[\s:]*([0-9,]+(?:\.[0-9]{2})?)", text, re.IGNORECASE)
@@ -621,9 +635,167 @@ class ClaimExtractor:
             return record
 
     def _call_llm_extraction(self, text: str, provider: str = "primary") -> StructuredClaimRecord:
-        # Untrusted document text defence (SEC-10): text is injected as pure JSON data payload
-        # Schema-constrained output ensures absent fields return null, never invented.
+        """Calls external LLM (Anthropic, Gemini, OpenAI) with strict schema enforcement (PRD FR-02, SEC-10)."""
         key = self.primary_key if provider == "primary" else self.fallback_key
-        # Call provider endpoint via httpx if configured
-        # Fall back to heuristic if provider call times out
-        return heuristic_claim_extractor(text)
+        if not key:
+            raise ValueError(f"No API key configured for {provider} provider")
+
+        system_prompt = (
+            "You are an expert insurance document extraction system for Indian health insurance claims.\n"
+            "Extract the following fields from the rejection letter into a valid JSON object matching this schema:\n"
+            "{\n"
+            '  "insurer_name": string or null,\n'
+            '  "policy_number": string or null,\n'
+            '  "claim_reference": string or null,\n'
+            '  "claim_amount": number (float) or null,\n'
+            '  "rejection_date": string (YYYY-MM-DD) or null,\n'
+            '  "stated_ground": string or null,\n'
+            '  "cited_clause_ref": string or null,\n'
+            '  "policy_inception_date": string (YYYY-MM-DD) or null,\n'
+            '  "continuous_months": integer or null,\n'
+            '  "policyholder_name": string or null\n'
+            "}\n\n"
+            "CRITICAL EXTRACTION RULES:\n"
+            "1. STRICT TRUTHFULNESS: DO NOT GUESS OR FABRICATE ANY VALUES. If any field is not explicitly present in the document text, return null for that field.\n"
+            "2. For 'policyholder_name': Extract the patient/insured individual's name. Do NOT extract company names, TPAs, or officer titles like 'Claims Manager' or 'Authorized Signatory'.\n"
+            "3. For 'claim_reference': Extract the claim number/ID. Do NOT include words like 'ID' or 'Claim No' in the value itself.\n"
+            "4. For 'cited_clause_ref': Extract the specific policy clause or exclusion cited (e.g., 'Clause 4.1', 'Section 3(a)'). If no specific clause is cited, return null.\n"
+            "5. Return ONLY the raw JSON object. Do not include markdown code fences or conversational text."
+        )
+
+        user_content = f"<document_text>\n{text[:12000]}\n</document_text>"
+        raw_json_str = None
+
+        with httpx.Client(timeout=15.0) as client:
+            if key.startswith("sk-ant-"):
+                # Anthropic Messages API
+                resp = client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-3-5-sonnet-20241022",
+                        "max_tokens": 1024,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": user_content}],
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                raw_json_str = data["content"][0]["text"]
+
+            elif key.startswith("AIzaSy"):
+                # Google Gemini API
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+                resp = client.post(
+                    url,
+                    headers={"content-type": "application/json"},
+                    json={
+                        "system_instruction": {"parts": [{"text": system_prompt}]},
+                        "contents": [{"parts": [{"text": user_content}]}],
+                        "generationConfig": {"response_mime_type": "application/json"},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                raw_json_str = data["candidates"][0]["content"]["parts"][0]["text"]
+
+            else:
+                # OpenAI / OpenAI-compatible API
+                resp = client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                raw_json_str = data["choices"][0]["message"]["content"]
+
+        if not raw_json_str:
+            raise ValueError(f"Empty response from {provider} LLM")
+
+        # Strip any code fence formatting if returned
+        cleaned_str = re.sub(r"^```(?:json)?\s*", "", raw_json_str.strip())
+        cleaned_str = re.sub(r"\s*```$", "", cleaned_str).strip()
+
+        payload = json.loads(cleaned_str)
+
+        # Parse and sanitize fields strictly with regex fallback for unextracted items
+        rejection_date = None
+        if payload.get("rejection_date"):
+            rejection_date = parse_flexible_date(str(payload["rejection_date"]))
+        if not rejection_date:
+            rejection_date = extract_rejection_date_from_text(text)
+
+        policy_inception_date = None
+        if payload.get("policy_inception_date"):
+            policy_inception_date = parse_flexible_date(str(payload["policy_inception_date"]))
+
+        claim_amount = None
+        if payload.get("claim_amount") is not None:
+            try:
+                claim_amount = float(payload["claim_amount"])
+            except (ValueError, TypeError):
+                claim_amount = None
+        if claim_amount is None:
+            claim_amount = extract_claim_amount_from_text(text)
+
+        continuous_months = None
+        if payload.get("continuous_months") is not None:
+            try:
+                continuous_months = int(payload["continuous_months"])
+            except (ValueError, TypeError):
+                continuous_months = None
+        elif rejection_date and policy_inception_date:
+            days = (rejection_date - policy_inception_date).days
+            continuous_months = max(0, days // 30)
+
+        insurer_name = payload.get("insurer_name")
+        if not insurer_name:
+            insurer_name = extract_insurer_name_from_text(text)
+
+        policy_number = payload.get("policy_number")
+        if not policy_number:
+            policy_number = extract_policy_number_from_text(text)
+
+        claim_reference = payload.get("claim_reference")
+        if not claim_reference:
+            claim_reference = extract_claim_reference_from_text(text)
+
+        stated_ground = payload.get("stated_ground")
+        if not stated_ground:
+            stated_ground = extract_stated_ground_from_text(text)
+
+        cited_clause_ref = payload.get("cited_clause_ref")
+        if not cited_clause_ref:
+            cited_clause_ref = extract_rejection_clause_from_text(text)
+
+        policyholder_name = payload.get("policyholder_name")
+        if not policyholder_name:
+            policyholder_name = extract_policyholder_name_from_text(text)
+
+        return StructuredClaimRecord(
+            insurer_name=insurer_name,
+            policy_number=policy_number,
+            claim_reference=claim_reference,
+            claim_amount=claim_amount,
+            rejection_date=rejection_date,
+            stated_ground=stated_ground,
+            cited_clause_ref=cited_clause_ref,
+            policy_inception_date=policy_inception_date,
+            continuous_months=continuous_months,
+            policyholder_name=policyholder_name,
+        )

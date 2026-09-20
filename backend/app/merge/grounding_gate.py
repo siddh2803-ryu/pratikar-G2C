@@ -126,13 +126,18 @@ def merge_and_assemble_verdict(
 
             if clause_error_msg:
                 prov_ref = "IRDAI Master Circular on Operations 2024 cl. 6 / Claim Settlement Norms"
+                source_detail = (
+                    f"[IRDAI Master Circular on Operations 2024 cl. 6]: {clause_error_msg}"
+                    if not clause_error_msg.startswith("[")
+                    else clause_error_msg
+                )
                 raw_evidence.append(
                     EvidenceItem(
                         id=f"ev_{uuid.uuid4().hex[:8]}",
                         statement="Insurers are legally mandated to convey specific contractual grounds and operative policy clauses for claim repudiation.",
                         source_type="provision",
                         provision_ref=prov_ref,
-                        source_text="[IRDAI Master Circular on Operations 2024 cl. 6]: Rejection of claims shall be made only after communicating specific grounds along with operative policy terms and conditions. Generic or clause-less repudiations violate regulatory standards.",
+                        source_text=source_detail,
                         ordinal=ordinal,
                     )
                 )

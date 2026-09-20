@@ -57,6 +57,19 @@ def test_pre_cached_demo_cases():
     assert r2_appeal.status_code == 200
     assert r2_appeal.json()["kind"] == "grounds_request"
 
+    # Demo Case 2 (Weak - Flow B Valid 30-Day Exclusion)
+    r_weak = client.get("/api/analyses/demo-case-2-weak-valid-rejection")
+    assert r_weak.status_code == 200
+    d_weak = r_weak.json()
+    assert d_weak["verdict"]["level"] == "weak"
+    assert d_weak["verdict"]["flow"] == "flow_b"
+    assert d_weak["verdict"]["appeal_available"] is False
+    assert d_weak["verdict"]["grounds_letter_available"] is False
+    # Attempting to generate appeal on weak verdict must return HTTP 400 (PRD FR-12)
+    r_weak_appeal = client.post("/api/analyses/demo-case-2-weak-valid-rejection/appeal", json={"language": "en"})
+    assert r_weak_appeal.status_code == 400
+    assert "no appeal is generated" in r_weak_appeal.json()["detail"]
+
     # Demo Case 3 (Strong - Clause/Policy Mismatch)
     r3 = client.get("/api/analyses/demo-case-3-clause-mismatch")
     assert r3.status_code == 200

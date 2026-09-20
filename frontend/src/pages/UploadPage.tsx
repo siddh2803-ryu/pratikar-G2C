@@ -78,7 +78,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
           </div>
           <span className="text-xs text-slate-400 font-mono">{t('upload.fast_path_time')}</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
           <button
             type="button"
             onClick={() => loadDemoCase('demo-case-1-strong-moratorium')}
@@ -93,6 +93,23 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
               {t('upload.demo1_desc')}
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => loadDemoCase('demo-case-2-weak-valid-rejection')}
+            disabled={loading}
+            className="p-3 bg-white/10 hover:bg-white/15 active:bg-white/20 border border-white/10 rounded-xl text-left transition-all group"
+          >
+            <div className="text-[11px] font-bold text-rose-300 uppercase tracking-wide">
+              {t('upload.demo_weak_tag')}
+            </div>
+            <div className="text-xs font-semibold mt-1 text-slate-100 group-hover:text-white">
+              {t('upload.demo_weak_title')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {t('upload.demo_weak_desc')}
             </div>
           </button>
 

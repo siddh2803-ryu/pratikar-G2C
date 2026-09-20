@@ -55,6 +55,61 @@ const DEMO_CASES: Record<string, any> = {
       appeal_available: true,
     }
   },
+  'demo-case-2-weak-valid-rejection': {
+    analysis_id: 'demo-case-2-weak-valid-rejection',
+    status: 'complete',
+    created_at: new Date().toISOString(),
+    language: 'en',
+    appeal_available: false,
+    grounds_letter_available: false,
+    appeal_kind: 'gro_letter',
+    appeal_document_id: 'doc-demo-weak',
+    claim_record: {
+      insurer_name: 'Bajaj Allianz General Insurance',
+      policy_number: 'OG-26-1902-1801-00001234',
+      claim_reference: 'BAGIC/2026/CLM/99102',
+      claim_amount: 75000.0,
+      rejection_date: '2026-08-18',
+      stated_ground: 'Repudiation under Clause 4.1: Claim occurred within initial 30 days waiting period.',
+      cited_clause_ref: 'Clause 4.1',
+      policy_inception_date: '2026-08-06',
+      continuous_months: 0,
+      policyholder_name: 'Amit Sharma',
+    },
+    verdict: {
+      level: 'weak',
+      summary: "The insurer's repudiation is legally and contractually valid under operative policy waiting period provisions.",
+      reasons: [
+        'The insurer repudiated the claim citing Clause 4.1 (30-day initial waiting period for illnesses other than accidents).',
+        'The policy incepted on 2026-08-06 and the hospitalization occurred on 2026-08-18 (after only 12 days of active coverage).',
+        'Under IRDAI Master Circular on Operations 2024 and standard health insurance policy conditions, an initial waiting period of 30 days from inception is statutorily and contractually valid. No appeal grounds exist for this repudiation.'
+      ],
+      evidence_trail: [
+        {
+          id: 'ev_demo_weak_1',
+          statement: 'Policy Clause 4.1 specifies an initial waiting period of 30 days from inception during which illness claims are excluded.',
+          source_type: 'policy_span',
+          page_number: 8,
+          source_text: 'Clause 4.1 Initial 30-Day Waiting Period: A waiting period of 30 days from the inception date of the policy will be applicable for all illness claims except accidental injuries.',
+          ordinal: 1,
+        },
+        {
+          id: 'ev_demo_weak_2',
+          statement: 'The claim occurred 12 days after policy inception, falling squarely within the contractually operative 30-day exclusion window.',
+          source_type: 'provision',
+          provision_ref: 'IRDAI Health Insurance Regulations / Waiting Period Norms',
+          source_text: '[IRDAI Norms]: Insurers are permitted an initial 30-day waiting period from policy inception for all illnesses. Repudiation within this window is valid.',
+          ordinal: 2,
+        }
+      ],
+      generated_at: '2026-08-18T10:00:00Z',
+      statutory_deadline: '15 Calendar Days (IRDAI Master Circular 2024 cl. 6)',
+      non_advice_notice: 'This evaluation is generated for grievance assistance and dispute documentation under IRDAI guidelines. It does not constitute formal legal counsel.',
+      flow: 'flow_b',
+      grounds_letter_available: false,
+      appeal_available: false,
+    }
+  },
   'demo-case-2-no-clause': {
     analysis_id: 'demo-case-2-no-clause',
     status: 'complete',
@@ -525,14 +580,44 @@ export default async function handler(req: any, res: any) {
     let analysis = DEMO_CASES[analysisId];
     if (!analysis) {
       if (analysisId === 'case-1' || analysisId.includes('case-1')) analysis = DEMO_CASES['demo-case-1-strong-moratorium'];
-      else if (analysisId === 'case-2' || analysisId.includes('case-2')) analysis = DEMO_CASES['demo-case-2-no-clause'];
-      else if (analysisId === 'case-3' || analysisId.includes('case-3')) analysis = DEMO_CASES['demo-case-3-clause-mismatch'];
+      else if (analysisId === 'case-2' || analysisId.includes('weak') || analysisId.includes('case-2')) analysis = DEMO_CASES['demo-case-2-weak-valid-rejection'];
+      else if (analysisId === 'case-3' || analysisId.includes('case-3')) analysis = DEMO_CASES['demo-case-2-no-clause'];
+      else if (analysisId === 'case-4' || analysisId.includes('case-4')) analysis = DEMO_CASES['demo-case-3-clause-mismatch'];
+    }
+
+    // 3. DELETE /api/analyses/:id (PRD §17 Endpoint #6: session disposal)
+    if (req.method === 'DELETE') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).json({
+        status: 'disposed',
+        analysis_id: analysisId,
+        message: 'Analysis session and associated documents securely disposed (SEC-05).',
+      });
+    }
+
+    // 4. GET /api/analyses/:id/evidence/:ref (PRD §17 Endpoint #3)
+    const isEvidence = segments.includes('evidence') || urlPath.includes('/evidence');
+    if (isEvidence && req.method === 'GET') {
+      const evIdx = segments.indexOf('evidence');
+      const evRef = (evIdx !== -1 && segments[evIdx + 1]) ? segments[evIdx + 1] : urlPath.split('/evidence/')[1]?.split('?')[0];
+      const trail = analysis?.verdict?.evidence_trail || [];
+      const found = trail.find((e: any) => e.id === evRef || String(e.ordinal) === evRef);
+      if (found) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).json(found);
+      }
+      return res.status(404).json({ error: `Evidence reference '${evRef}' not found.` });
     }
 
     const isAppeal = segments.includes('appeal') || urlPath.includes('/appeal');
 
-    // Appeal generation: POST /api/analyses/:id/appeal
+    // 5. POST /api/analyses/:id/appeal (PRD §17 Endpoint #4)
     if (isAppeal && req.method === 'POST') {
+      if (!analysis?.verdict?.appeal_available && !analysis?.verdict?.grounds_letter_available) {
+        return res.status(400).json({
+          detail: 'Where the rejection is valid (Weak verdict), no appeal is generated (PRD FR-12).',
+        });
+      }
       res.setHeader('Content-Type', 'application/json');
       const kind = analysis?.verdict?.flow === 'flow_c' ? 'grounds_request' : 'gro_letter';
       return res.status(200).json({
@@ -542,8 +627,8 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Appeal PDF download: GET /api/analyses/:id/appeal/:docId
-    if (isAppeal && req.method === 'GET' && (segments.length >= 4 || urlPath.match(/\/appeal\/[^\/]+/))) {
+    // 6. GET /api/analyses/:id/appeal/:docId (PRD §17 Endpoint #5: PDF download)
+    if (isAppeal && req.method === 'GET' && (segments.length >= 3 || urlPath.match(/\/appeal\/[^\/]+/))) {
       if (!analysis) {
         analysis = DEMO_CASES['demo-case-1-strong-moratorium'];
       }
@@ -555,7 +640,9 @@ export default async function handler(req: any, res: any) {
       } catch (e: any) {
         return res.status(500).json({ error: e.message });
       }
-    // GET /api/analyses/:id
+    }
+
+    // 7. GET /api/analyses/:id (PRD §17 Endpoint #2)
     if (analysis) {
       res.setHeader('Content-Type', 'application/json');
       return res.status(200).json(analysis);
