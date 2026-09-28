@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pratikar API",
-    description="Health insurance claim rejection contest engine for Geek2Code 2026 Grand Final.",
+    description="Health insurance claim rejection contest engine for Pitch Tank 1.0.",
     version="1.0.0",
     lifespan=lifespan,
 )

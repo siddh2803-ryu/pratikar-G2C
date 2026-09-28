@@ -1,8 +1,8 @@
 # Pratikar (प्रतिकार) — Health Insurance Claim Rejection Contest Engine
 
-> **Geek2Code 2026 Grand Final · 20 September 2026**  
+> **Pitch Tank 1.0**  
 > **Track:** FinTech / InsurTech, Open Innovation  
-> **Team:** Sid, Pratham, Navya, Parnika, Dhiraj  
+> **Team:** Pratham, Navya, Parnika  
 
 ---
 
@@ -25,11 +25,9 @@ In FY25, **87.50%** of Indian health insurance claims were settled by number, me
 
 | Member | Primary Ownership | Deliverables in this Codebase |
 | :--- | :--- | :--- |
-| **Sid** | Architecture, Rule Engine & Grounding Gate | `app/rules/`, `app/merge/grounding_gate.py`, `app/generation/` |
-| **Pratham** | Ingestion, API & Session Disposal | `app/ingestion/`, `app/api/analyses.py`, `app/db/database.py` |
+| **Pratham** | Architecture, Ingestion, API & Grounding Gate | `app/ingestion/`, `app/api/analyses.py`, `app/rules/`, `app/merge/` |
 | **Navya** | IRDAI Regulatory Rulebook as YAML | `backend/rulebook/irdai_rules.yaml` (Coded Master Circular 2024 provisions) |
-| **Parnika** | Frontend Design & Evidence Trail UI | `frontend/src/components/`, `frontend/src/pages/` |
-| **Dhiraj** | Ground-truth Suite & Verification | `backend/tests/`, `backend/demo_cases/` |
+| **Parnika** | Frontend Design, Evidence Trail UI & Verification | `frontend/src/components/`, `frontend/src/pages/`, `backend/tests/` |
 
 ---
 

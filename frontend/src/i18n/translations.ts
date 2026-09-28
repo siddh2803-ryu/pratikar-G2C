@@ -11,7 +11,7 @@ export const TRANSLATIONS = {
     // Navigation & Common Header
     'nav.brand': 'Pratikar',
     'nav.insurtech': 'InsurTech',
-    'nav.tagline': 'Health Claim Rejection Contest Engine · Geek2Code 2026 Grand Final',
+    'nav.tagline': 'Health Claim Rejection Contest Engine · Pitch Tank 1.0',
     'nav.api_warmed': 'API Warmed & Ready',
     'nav.api_connecting': 'API Connecting',
     'nav.language_label': 'Language:',
@@ -22,7 +22,7 @@ export const TRANSLATIONS = {
 
     // Footer
     'footer.disclaimer': 'Pratikar · Two-Path Grounded Regulatory Engine · Powered by IRDAI Master Circular 2024',
-    'footer.team': 'Team: Sid · Pratham · Navya · Parnika · Dhiraj',
+    'footer.team': 'Team: Pratham · Navya · Parnika',
     'footer.zero_retention': 'Zero Training Retention (SEC-05)',
 
     // Upload Page
@@ -184,7 +184,7 @@ export const TRANSLATIONS = {
     // Navigation & Common Header
     'nav.brand': 'प्रतिकार (Pratikar)',
     'nav.insurtech': 'इन्शुरटेक',
-    'nav.tagline': 'स्वास्थ्य दावा अस्वीकृति चुनौती इंजन · Geek2Code 2026 ग्रैंड फिनाले',
+    'nav.tagline': 'स्वास्थ्य दावा अस्वीकृति चुनौती इंजन · Pitch Tank 1.0',
     'nav.api_warmed': 'एपीआई सक्रिय एवं तैयार',
     'nav.api_connecting': 'एपीआई कनेक्ट हो रहा है',
     'nav.language_label': 'भाषा:',
@@ -195,7 +195,7 @@ export const TRANSLATIONS = {
 
     // Footer
     'footer.disclaimer': 'प्रतिकार · द्वि-मार्ग आधारित नियामक इंजन · आईआरडीएआई मास्टर परिपत्र 2024 द्वारा संचालित',
-    'footer.team': 'टीम: सिड · प्रथम · नव्या · पर्णिका · धीरज',
+    'footer.team': 'टीम: प्रथम · नव्या · पर्णिका',
     'footer.zero_retention': 'शून्य प्रशिक्षण डेटा प्रतिधारण (SEC-05)',
 
     // Upload Page

@@ -1,8 +1,8 @@
 # Pratikar — Build Status Check & Master Implementation Plan
 
 **Date:** 19 September 2026 (Grand Final: 20 September 2026)  
-**Theme:** FinTech / InsurTech, Open Innovation track (Geek2Code 2026)  
-**Team:** Sid, Pratham, Navya, Parnika, Dhiraj  
+**Theme:** FinTech / InsurTech, Open Innovation track (Pitch Tank 1.0)  
+**Team:** Pratham, Navya, Parnika  
 
 ---
 
