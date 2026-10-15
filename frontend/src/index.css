@@ -2,9 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', 'Noto Sans Devanagari', system-ui, -apple-system, sans-serif;
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
+@layer base {
+  :root {
+    --geist-foreground: #171717;
+    --geist-background: #fafafa;
+    --geist-border: #e5e5e5;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  body {
+    font-family: 'Inter', 'Noto Sans Devanagari', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #171717;
+    background-color: #fafafa;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    selection-background-color: #e2e8f0;
+  }
+
+  /* Accessible Vercel focus rings */
+  :focus-visible {
+    outline: 2px solid #18181b;
+    outline-offset: 2px;
+  }
+}
+
+/* Custom sleek scrollbar for citation and document viewers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
 }

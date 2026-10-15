@@ -11,7 +11,7 @@ export const TRANSLATIONS = {
     // Navigation & Common Header
     'nav.brand': 'Pratikar',
     'nav.insurtech': 'InsurTech',
-    'nav.tagline': 'Health Claim Rejection Contest Engine · Pitch Tank 1.0',
+    'nav.tagline': 'Health Claim Rejection Contest Engine · PromptWars',
     'nav.api_warmed': 'API Warmed & Ready',
     'nav.api_connecting': 'API Connecting',
     'nav.language_label': 'Language:',
@@ -184,7 +184,7 @@ export const TRANSLATIONS = {
     // Navigation & Common Header
     'nav.brand': 'प्रतिकार (Pratikar)',
     'nav.insurtech': 'इन्शुरटेक',
-    'nav.tagline': 'स्वास्थ्य दावा अस्वीकृति चुनौती इंजन · Pitch Tank 1.0',
+    'nav.tagline': 'स्वास्थ्य दावा अस्वीकृति चुनौती इंजन · PromptWars',
     'nav.api_warmed': 'एपीआई सक्रिय एवं तैयार',
     'nav.api_connecting': 'एपीआई कनेक्ट हो रहा है',
     'nav.language_label': 'भाषा:',

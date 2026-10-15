@@ -19,7 +19,6 @@ interface AppealPageProps {
 
 export const AppealPage: React.FC<AppealPageProps> = ({
   analysisId,
-  documentId,
   claimRecord,
   verdict,
   appealKind,
@@ -29,7 +28,6 @@ export const AppealPage: React.FC<AppealPageProps> = ({
 }) => {
   const { language, t, translateDynamic } = useLanguage();
   const isFlowC = appealKind === 'grounds_request';
-  const downloadUrl = api.getAppealDownloadUrl(analysisId, documentId);
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
@@ -45,7 +43,7 @@ export const AppealPage: React.FC<AppealPageProps> = ({
       });
       const pdfBlob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
 
-      // 3. Trigger clean browser download
+      // Trigger clean browser download
       const filename = isFlowC
         ? `Request_for_Grounds_${claimRecord.claim_reference || 'Claim'}.pdf`
         : `GRO_Appeal_Letter_${claimRecord.claim_reference || 'Claim'}.pdf`;
@@ -80,21 +78,21 @@ export const AppealPage: React.FC<AppealPageProps> = ({
     : t('appeal.as_per_bills');
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 py-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto space-y-6 py-2 sm:py-4">
+      {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <button
             type="button"
             onClick={onBackToVerdict}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-brand-600 mb-1 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-950 mb-1.5 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> {t('appeal.back_btn')}
           </button>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
             {isFlowC ? t('appeal.title_flow_c') : t('appeal.title_gro')}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+          <p className="text-xs sm:text-sm text-zinc-500 mt-0.5">
             {t('appeal.subtitle', { insurer: claimRecord.insurer_name })}
           </p>
         </div>
@@ -104,14 +102,14 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         </div>
       </div>
 
-      {/* Main Document Preview Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-10 space-y-6 font-mono text-xs sm:text-sm leading-relaxed text-slate-800">
+      {/* Main Document Preview Card (Paper Elevation) */}
+      <div className="bg-white rounded-2xl border border-zinc-200/90 shadow-sm p-6 sm:p-10 space-y-6 font-mono text-xs sm:text-sm leading-relaxed text-zinc-800">
         {/* Document Header */}
-        <div className="border-b border-slate-200 pb-4 text-center space-y-1">
-          <div className="font-bold text-base text-slate-900">
+        <div className="border-b border-zinc-200 pb-4 text-center space-y-1">
+          <div className="font-bold text-base text-zinc-950 tracking-tight">
             {isFlowC ? t('appeal.doc_header_flow_c') : t('appeal.doc_header_gro')}
           </div>
-          <div className="text-xs text-slate-400 font-sans">
+          <div className="text-xs text-zinc-400 font-sans">
             {t('appeal.doc_sub')}
           </div>
         </div>
@@ -120,11 +118,11 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         <div className="space-y-1">
           <p><b>{t('appeal.to')}</b></p>
           <p>{t('appeal.gro_designation')}</p>
-          <p className="font-bold text-slate-900">{claimRecord.insurer_name}</p>
+          <p className="font-bold text-zinc-950">{claimRecord.insurer_name}</p>
         </div>
 
         {/* Subject */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-sans font-semibold text-xs sm:text-sm text-slate-900">
+        <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 font-sans font-semibold text-xs sm:text-sm text-zinc-900">
           <b>{t('appeal.subject_label')}</b>{' '}
           {isFlowC
             ? t('appeal.subject_flow_c', { ref: claimRef })
@@ -132,8 +130,8 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         </div>
 
         {/* Particulars */}
-        <div className="space-y-1 font-sans text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-          <div className="font-bold uppercase tracking-wider text-slate-500 mb-2">
+        <div className="space-y-1.5 font-sans text-xs bg-zinc-50 p-4 sm:p-5 rounded-xl border border-zinc-200">
+          <div className="font-bold uppercase tracking-wider text-zinc-400 mb-2 text-[10px]">
             {t('appeal.claim_particulars_title')}
           </div>
           <p>• <b>{t('appeal.particular_name')}</b> {policyholder}</p>
@@ -146,10 +144,10 @@ export const AppealPage: React.FC<AppealPageProps> = ({
 
         {/* Grounds */}
         <div className="space-y-2">
-          <div className="font-bold text-slate-900 font-sans text-xs uppercase tracking-wider">
+          <div className="font-bold text-zinc-950 font-sans text-xs uppercase tracking-wider">
             {t('appeal.statutory_grounds_title')}
           </div>
-          <ul className="space-y-1.5 pl-4 list-disc">
+          <ul className="space-y-2 pl-4 list-disc">
             {verdict.reasons.map((r, i) => (
               <li key={i}>{translateDynamic(r)}</li>
             ))}
@@ -158,10 +156,10 @@ export const AppealPage: React.FC<AppealPageProps> = ({
 
         {/* Evidence items */}
         <div className="space-y-2">
-          <div className="font-bold text-slate-900 font-sans text-xs uppercase tracking-wider">
+          <div className="font-bold text-zinc-950 font-sans text-xs uppercase tracking-wider">
             {t('appeal.evidence_citations_title')}
           </div>
-          <div className="space-y-1.5 text-xs text-slate-700">
+          <div className="space-y-2 text-xs text-zinc-700">
             {verdict.evidence_trail.map((ev, i) => {
               const sourceLabel = ev.provision_ref
                 ? translateDynamic(ev.provision_ref)
@@ -178,7 +176,7 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         </div>
 
         {/* Demand & Timeline */}
-        <div className="space-y-2 text-xs text-slate-700 pt-2 border-t border-slate-200">
+        <div className="space-y-2 text-xs text-zinc-700 pt-3 border-t border-zinc-200">
           <p>
             <b>{t('appeal.demand_label')}</b> {t('appeal.demand_text_1')}
           </p>
@@ -188,22 +186,22 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         {/* Signoff */}
         <div className="pt-4 font-sans text-xs">
           <p>{t('appeal.signoff_yours')}</p>
-          <p className="font-bold text-slate-900 mt-4">{policyholder}</p>
+          <p className="font-bold text-zinc-950 mt-4">{policyholder}</p>
           {claimRecord.policyholder_name && (
-            <p className="text-slate-600 text-xs">{t('appeal.signoff_role')}</p>
+            <p className="text-zinc-600 text-xs">{t('appeal.signoff_role')}</p>
           )}
-          <p className="text-slate-500">{t('appeal.signoff_date', { date: claimRecord.rejection_date })}</p>
+          <p className="text-zinc-500">{t('appeal.signoff_date', { date: claimRecord.rejection_date })}</p>
         </div>
       </div>
 
-      {/* Action Footer */}
-      <div className="p-6 bg-slate-100 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Action Footer (Vercel Style Card) */}
+      <div className="p-6 bg-zinc-100/90 rounded-2xl border border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         {/* Download Button */}
         <button
           type="button"
           onClick={handleDownload}
           disabled={downloading}
-          className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 active:bg-brand-800 disabled:opacity-75 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+          className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-950 hover:bg-black active:scale-[0.99] disabled:opacity-75 text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
           <span>{downloading ? t('appeal.btn_downloading') : t('appeal.btn_download')}</span>
@@ -213,12 +211,14 @@ export const AppealPage: React.FC<AppealPageProps> = ({
         <button
           type="button"
           onClick={handleDisposal}
-          className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 active:bg-rose-100 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
         >
-          <Trash2 className="w-4 h-4 text-rose-600" />
+          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
           <span>{t('appeal.btn_dispose')}</span>
         </button>
       </div>
     </div>
   );
 };
+
+export default AppealPage;

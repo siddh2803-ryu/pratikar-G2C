@@ -1,6 +1,6 @@
 # Pratikar (प्रतिकार) — Health Insurance Claim Rejection Contest Engine
 
-> **Pitch Tank 1.0**  
+> **PromptWars**  
 > **Track:** FinTech / InsurTech, Open Innovation  
 > **Team:** Pratham, Navya, Parnika  
 

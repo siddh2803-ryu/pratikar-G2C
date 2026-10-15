@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Check } from 'lucide-react';
 import { api, AnalysisResponse, StructuredClaimRecord, Verdict } from './api/client';
 import { UploadPage } from './pages/UploadPage';
 import { ConfirmPage } from './pages/ConfirmPage';
@@ -81,34 +81,55 @@ const AppContent: React.FC = () => {
     setAppealDocumentId(null);
   };
 
+  // Helper to determine step ordering
+  const stepIndex = {
+    upload: 1,
+    confirm: 2,
+    verdict: 3,
+    appeal: 4,
+  }[step];
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      {/* Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div className="min-h-screen flex flex-col bg-[#fafafa] text-zinc-900 selection:bg-zinc-200">
+      {/* Vercel-Style Navigation Bar */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-200/80 transition-all">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={handleRestart}>
-            <div className="p-2 rounded-xl bg-brand-600 text-white shadow-xs">
-              <Shield className="w-5 h-5" />
+          <div
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={handleRestart}
+            title="Reset to Home"
+          >
+            <div className="p-2 rounded-xl bg-zinc-950 text-white shadow-xs border border-zinc-800 transition-transform duration-150 group-hover:scale-105">
+              <Shield className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-lg sm:text-xl tracking-tight text-slate-900">
+                <span className="font-bold text-lg sm:text-xl tracking-tight text-zinc-950">
                   {t('nav.brand')}
                 </span>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-50 border border-brand-200 text-brand-700">
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-700">
                   {t('nav.insurtech')}
                 </span>
               </div>
-              <div className="text-[10px] text-slate-500 hidden sm:block">
+              <div className="text-[11px] text-zinc-500 hidden sm:block tracking-tight">
                 {t('nav.tagline')}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Warmed API status badge */}
-            <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              <span className={`w-2 h-2 rounded-full ${apiWarmed ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+            {/* Warmed API status badge with Vercel ping dot */}
+            <div className="hidden sm:flex items-center gap-2 text-[11px] font-medium px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-600 border border-zinc-200/80 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                {apiWarmed && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    apiWarmed ? 'bg-emerald-500' : 'bg-zinc-400'
+                  }`}
+                ></span>
+              </span>
               <span>{apiWarmed ? t('nav.api_warmed') : t('nav.api_connecting')}</span>
             </div>
 
@@ -116,36 +137,123 @@ const AppContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Step Indicator */}
-        <div className="bg-slate-100/70 border-t border-slate-200 py-1.5 px-4">
-          <div className="max-w-6xl mx-auto flex items-center justify-between text-[11px] font-semibold text-slate-500">
-            <div className="flex items-center gap-2 sm:gap-6 mx-auto">
-              <span className={`flex items-center gap-1 ${step === 'upload' ? 'text-brand-600 font-bold' : ''}`}>
-                <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">1</span>
-                <span>{t('nav.step_1')}</span>
-              </span>
-              <span>→</span>
-              <span className={`flex items-center gap-1 ${step === 'confirm' ? 'text-brand-600 font-bold' : ''}`}>
-                <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">2</span>
-                <span>{t('nav.step_2')}</span>
-              </span>
-              <span>→</span>
-              <span className={`flex items-center gap-1 ${step === 'verdict' ? 'text-brand-600 font-bold' : ''}`}>
-                <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">3</span>
-                <span>{t('nav.step_3')}</span>
-              </span>
-              <span>→</span>
-              <span className={`flex items-center gap-1 ${step === 'appeal' ? 'text-brand-600 font-bold' : ''}`}>
-                <span className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[10px]">4</span>
-                <span>{t('nav.step_4')}</span>
-              </span>
-            </div>
+        {/* Vercel-Style Segmented Step Progress Indicator */}
+        <nav className="bg-zinc-50/70 border-t border-zinc-200/60 py-2 px-4" aria-label="Progress">
+          <div className="max-w-4xl mx-auto flex items-center justify-center">
+            <ol className="flex items-center gap-1.5 sm:gap-3 text-xs font-medium">
+              {/* Step 1 */}
+              <li
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                  step === 'upload'
+                    ? 'bg-zinc-950 text-white font-semibold shadow-xs'
+                    : stepIndex > 1
+                    ? 'text-zinc-700 hover:text-zinc-950 cursor-pointer'
+                    : 'text-zinc-400'
+                }`}
+                onClick={() => {
+                  if (stepIndex > 1) handleRestart();
+                }}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === 'upload'
+                      ? 'bg-white text-zinc-950'
+                      : stepIndex > 1
+                      ? 'bg-zinc-200 text-zinc-800'
+                      : 'bg-zinc-200/80 text-zinc-400'
+                  }`}
+                >
+                  {stepIndex > 1 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : '1'}
+                </span>
+                <span className="hidden xs:inline">{t('nav.step_1')}</span>
+              </li>
+
+              <li className="text-zinc-300 text-xs">/</li>
+
+              {/* Step 2 */}
+              <li
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                  step === 'confirm'
+                    ? 'bg-zinc-950 text-white font-semibold shadow-xs'
+                    : stepIndex > 2
+                    ? 'text-zinc-700 hover:text-zinc-950 cursor-pointer'
+                    : 'text-zinc-400'
+                }`}
+                onClick={() => {
+                  if (stepIndex > 2 && claimRecord) setStep('confirm');
+                }}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === 'confirm'
+                      ? 'bg-white text-zinc-950'
+                      : stepIndex > 2
+                      ? 'bg-zinc-200 text-zinc-800'
+                      : 'bg-zinc-200/80 text-zinc-400'
+                  }`}
+                >
+                  {stepIndex > 2 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : '2'}
+                </span>
+                <span className="hidden xs:inline">{t('nav.step_2')}</span>
+              </li>
+
+              <li className="text-zinc-300 text-xs">/</li>
+
+              {/* Step 3 */}
+              <li
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                  step === 'verdict'
+                    ? 'bg-zinc-950 text-white font-semibold shadow-xs'
+                    : stepIndex > 3
+                    ? 'text-zinc-700 hover:text-zinc-950 cursor-pointer'
+                    : 'text-zinc-400'
+                }`}
+                onClick={() => {
+                  if (stepIndex > 3 && verdict) setStep('verdict');
+                }}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === 'verdict'
+                      ? 'bg-white text-zinc-950'
+                      : stepIndex > 3
+                      ? 'bg-zinc-200 text-zinc-800'
+                      : 'bg-zinc-200/80 text-zinc-400'
+                  }`}
+                >
+                  {stepIndex > 3 ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : '3'}
+                </span>
+                <span className="hidden xs:inline">{t('nav.step_3')}</span>
+              </li>
+
+              <li className="text-zinc-300 text-xs">/</li>
+
+              {/* Step 4 */}
+              <li
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                  step === 'appeal'
+                    ? 'bg-zinc-950 text-white font-semibold shadow-xs'
+                    : 'text-zinc-400'
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === 'appeal'
+                      ? 'bg-white text-zinc-950'
+                      : 'bg-zinc-200/80 text-zinc-400'
+                  }`}
+                >
+                  4
+                </span>
+                <span className="hidden xs:inline">{t('nav.step_4')}</span>
+              </li>
+            </ol>
           </div>
-        </div>
+        </nav>
       </header>
 
       {/* Main Page Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-4">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {step === 'upload' && (
           <UploadPage onAnalysisStarted={handleAnalysisStarted} language={language} />
         )}
@@ -186,16 +294,20 @@ const AppContent: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-6">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div>
-            <b>{t('nav.brand')}</b> · {t('footer.disclaimer')}
+      {/* Vercel-Style Minimalist Footer */}
+      <footer className="mt-auto border-t border-zinc-200/80 bg-white py-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-zinc-950">{t('nav.brand')}</span>
+            <span className="text-zinc-300">·</span>
+            <span className="text-zinc-600">{t('footer.disclaimer')}</span>
           </div>
-          <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-3 text-[11px] text-zinc-400">
             <span>{t('footer.team')}</span>
-            <span>·</span>
-            <span>{t('footer.zero_retention')}</span>
+            <span className="text-zinc-300">·</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-600 font-mono text-[10px]">
+              {t('footer.zero_retention')}
+            </span>
           </div>
         </div>
       </footer>
