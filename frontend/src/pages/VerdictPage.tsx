@@ -30,7 +30,7 @@ export const VerdictPage: React.FC<VerdictPageProps> = ({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100 border border-zinc-200/80 text-[10px] font-bold uppercase tracking-wider text-zinc-600 shadow-2xs">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/80 text-[10px] font-bold uppercase tracking-wider text-zinc-600 shadow-2xs">
             {t('verdict.step_badge')}
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 mt-1 tracking-tight">

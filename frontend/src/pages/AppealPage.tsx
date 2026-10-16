@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Trash2, ArrowLeft } from 'lucide-react';
+import { Download, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
 import { api, StructuredClaimRecord, Verdict } from '../api/client';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { useLanguage } from '../context/LanguageContext';
@@ -203,7 +203,11 @@ export const AppealPage: React.FC<AppealPageProps> = ({
           disabled={downloading}
           className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-950 hover:bg-black active:scale-[0.99] disabled:opacity-75 text-white font-semibold text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
-          <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
+          {downloading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
           <span>{downloading ? t('appeal.btn_downloading') : t('appeal.btn_download')}</span>
         </button>
 

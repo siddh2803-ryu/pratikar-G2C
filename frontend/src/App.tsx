@@ -5,13 +5,18 @@ import { UploadPage } from './pages/UploadPage';
 import { ConfirmPage } from './pages/ConfirmPage';
 import { VerdictPage } from './pages/VerdictPage';
 import { AppealPage } from './pages/AppealPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
 import { LanguageToggle } from './components/LanguageToggle';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Language } from './i18n/translations';
 
+type AppStep = 'upload' | 'confirm' | 'verdict' | 'appeal' | 'privacy' | 'terms';
+
 const AppContent: React.FC = () => {
   const { language, setLanguage, t } = useLanguage();
-  const [step, setStep] = useState<'upload' | 'confirm' | 'verdict' | 'appeal'>('upload');
+  const [step, setStep] = useState<AppStep>('upload');
+  const [previousStep, setPreviousStep] = useState<AppStep>('upload');
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [claimRecord, setClaimRecord] = useState<StructuredClaimRecord | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -20,7 +25,24 @@ const AppContent: React.FC = () => {
   const [isGeneratingAppeal, setIsGeneratingAppeal] = useState<boolean>(false);
   const [apiWarmed, setApiWarmed] = useState<boolean>(false);
 
-  // Ping /api/health on mount to warm API for demo day
+  // Synchronize hash routing for direct access to #privacy and #terms
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === '#privacy') {
+        setStep('privacy');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      } else if (hash === '#terms') {
+        setStep('terms');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  // Ping /api/health on mount to warm API for evaluation
   useEffect(() => {
     api.getHealth()
       .then((res) => {
@@ -87,7 +109,26 @@ const AppContent: React.FC = () => {
     confirm: 2,
     verdict: 3,
     appeal: 4,
+    privacy: 0,
+    terms: 0,
   }[step];
+
+  const navigateToLegal = (legalStep: 'privacy' | 'terms') => {
+    if (step !== 'privacy' && step !== 'terms') {
+      setPreviousStep(step);
+    }
+    setStep(legalStep);
+    window.location.hash = legalStep;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleBackFromLegal = () => {
+    setStep(previousStep);
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fafafa] text-zinc-900 selection:bg-zinc-200">
@@ -107,7 +148,7 @@ const AppContent: React.FC = () => {
                 <span className="font-bold text-lg sm:text-xl tracking-tight text-zinc-950">
                   {t('nav.brand')}
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-700">
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/80 text-zinc-700">
                   {t('nav.insurtech')}
                 </span>
               </div>
@@ -119,7 +160,7 @@ const AppContent: React.FC = () => {
 
           <div className="flex items-center gap-3">
             {/* Warmed API status badge with Vercel ping dot */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] font-medium px-2.5 py-1 rounded-full bg-zinc-100/90 text-zinc-600 border border-zinc-200/80 shadow-2xs">
+            <div className="hidden sm:flex items-center gap-2 text-[11px] font-medium px-2.5 py-1 rounded-md bg-zinc-100/90 text-zinc-600 border border-zinc-200/80 shadow-2xs">
               <span className="relative flex h-2 w-2">
                 {apiWarmed && (
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -143,7 +184,7 @@ const AppContent: React.FC = () => {
             <ol className="flex items-center gap-1.5 sm:gap-3 text-xs font-medium">
               {/* Step 1 */}
               <li
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
                   step === 'upload'
                     ? 'bg-zinc-950 text-white font-semibold shadow-xs'
                     : stepIndex > 1
@@ -151,11 +192,11 @@ const AppContent: React.FC = () => {
                     : 'text-zinc-400'
                 }`}
                 onClick={() => {
-                  if (stepIndex > 1) handleRestart();
+                  if (stepIndex > 1 || step === 'privacy' || step === 'terms') handleRestart();
                 }}
               >
                 <span
-                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-4 h-4 rounded-sm flex items-center justify-center text-[10px] font-bold ${
                     step === 'upload'
                       ? 'bg-white text-zinc-950'
                       : stepIndex > 1
@@ -172,7 +213,7 @@ const AppContent: React.FC = () => {
 
               {/* Step 2 */}
               <li
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
                   step === 'confirm'
                     ? 'bg-zinc-950 text-white font-semibold shadow-xs'
                     : stepIndex > 2
@@ -184,7 +225,7 @@ const AppContent: React.FC = () => {
                 }}
               >
                 <span
-                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-4 h-4 rounded-sm flex items-center justify-center text-[10px] font-bold ${
                     step === 'confirm'
                       ? 'bg-white text-zinc-950'
                       : stepIndex > 2
@@ -201,7 +242,7 @@ const AppContent: React.FC = () => {
 
               {/* Step 3 */}
               <li
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
                   step === 'verdict'
                     ? 'bg-zinc-950 text-white font-semibold shadow-xs'
                     : stepIndex > 3
@@ -213,7 +254,7 @@ const AppContent: React.FC = () => {
                 }}
               >
                 <span
-                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-4 h-4 rounded-sm flex items-center justify-center text-[10px] font-bold ${
                     step === 'verdict'
                       ? 'bg-white text-zinc-950'
                       : stepIndex > 3
@@ -230,14 +271,14 @@ const AppContent: React.FC = () => {
 
               {/* Step 4 */}
               <li
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
                   step === 'appeal'
                     ? 'bg-zinc-950 text-white font-semibold shadow-xs'
                     : 'text-zinc-400'
                 }`}
               >
                 <span
-                  className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-4 h-4 rounded-sm flex items-center justify-center text-[10px] font-bold ${
                     step === 'appeal'
                       ? 'bg-white text-zinc-950'
                       : 'bg-zinc-200/80 text-zinc-400'
@@ -292,6 +333,14 @@ const AppContent: React.FC = () => {
             onLanguageChange={handleLanguageChange}
           />
         )}
+
+        {step === 'privacy' && (
+          <PrivacyPage onBack={handleBackFromLegal} />
+        )}
+
+        {step === 'terms' && (
+          <TermsPage onBack={handleBackFromLegal} />
+        )}
       </main>
 
       {/* Vercel-Style Minimalist Footer */}
@@ -302,10 +351,24 @@ const AppContent: React.FC = () => {
             <span className="text-zinc-300">·</span>
             <span className="text-zinc-600">{t('footer.disclaimer')}</span>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-zinc-400">
-            <span>{t('footer.team')}</span>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
+            <button
+              type="button"
+              onClick={() => navigateToLegal('privacy')}
+              className="hover:text-zinc-950 transition-colors cursor-pointer font-medium"
+            >
+              {t('footer.privacy')}
+            </button>
             <span className="text-zinc-300">·</span>
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-600 font-mono text-[10px]">
+            <button
+              type="button"
+              onClick={() => navigateToLegal('terms')}
+              className="hover:text-zinc-950 transition-colors cursor-pointer font-medium"
+            >
+              {t('footer.terms')}
+            </button>
+            <span className="text-zinc-300">·</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/80 text-zinc-600 font-mono text-[10px]">
               {t('footer.zero_retention')}
             </span>
           </div>

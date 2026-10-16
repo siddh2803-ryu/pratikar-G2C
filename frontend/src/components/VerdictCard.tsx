@@ -58,7 +58,7 @@ export const VerdictCard: React.FC<VerdictCardProps> = ({ verdict }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${badgeConfig.badgeBg} shadow-2xs`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md ${badgeConfig.badgeBg} shadow-2xs`}>
                 {badgeConfig.badgeText}
               </span>
               <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">

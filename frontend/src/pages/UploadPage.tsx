@@ -55,7 +55,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
     <div className="max-w-4xl mx-auto space-y-8 py-2 sm:py-4">
       {/* Hero Heading */}
       <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200/80 text-zinc-700 text-xs font-medium tracking-tight shadow-2xs">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-zinc-100 border border-zinc-200/80 text-zinc-700 text-xs font-medium tracking-tight shadow-2xs">
           <Shield className="w-3.5 h-3.5 text-zinc-600" />
           <span>{t('upload.hero_badge')}</span>
         </div>
@@ -79,7 +79,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
               {t('upload.fast_path_title')}
             </span>
           </div>
-          <span className="text-[11px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800">
+          <span className="text-[11px] font-mono text-zinc-400 px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800">
             {t('upload.fast_path_time')}
           </span>
         </div>
@@ -188,7 +188,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
               <label htmlFor="rejectionLetter" className="cursor-pointer block space-y-2">
                 {letterFile ? (
                   <div className="space-y-2 py-1">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div className="text-xs sm:text-sm font-semibold text-zinc-900 break-all px-2">
@@ -233,7 +233,7 @@ export const UploadPage: React.FC<UploadPageProps> = ({ onAnalysisStarted, langu
               <label htmlFor="policyWording" className="cursor-pointer block space-y-2">
                 {policyFile ? (
                   <div className="space-y-2 py-1">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div className="text-xs sm:text-sm font-semibold text-zinc-900 break-all px-2">
